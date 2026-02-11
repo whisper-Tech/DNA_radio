@@ -35,6 +35,7 @@ export default function Home() {
   const progressIntervalRef = useRef<number | null>(null);
 
   const currentSong = queue[0] || null;
+  console.log("[v0] Home rendered, queue length:", queue.length, "currentSong:", currentSong?.title);
 
   useEffect(() => {
     // Cyberpunk radio stream placeholder
