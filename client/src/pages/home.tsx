@@ -30,7 +30,7 @@ const INITIAL_QUEUE: Song[] = Array.from({ length: DEFAULT_QUEUE_SIZE }, (_, i) 
 export default function Home() {
   const [queue, setQueue] = useState<Song[]>(INITIAL_QUEUE);
   const [progress, setProgress] = useState(0);
-  const [volume, setVolume] = useState(0.5);
+  const [volume, setVolume] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const progressIntervalRef = useRef<number | null>(null);
 
@@ -39,10 +39,8 @@ export default function Home() {
   useEffect(() => {
     // Cyberpunk radio stream placeholder
     audioRef.current = new Audio("https://stream.nightride.fm/nightride.mp3");
-    audioRef.current.volume = volume;
-    audioRef.current.play().catch(() => {
-      console.log("Autoplay blocked. Waiting for user interaction.");
-    });
+    audioRef.current.volume = 0; // Start muted
+    audioRef.current.muted = true;
 
     return () => {
       if (audioRef.current) {
@@ -55,6 +53,11 @@ export default function Home() {
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume;
+      audioRef.current.muted = volume === 0;
+      // Start playing once the user turns up the volume
+      if (volume > 0 && audioRef.current.paused) {
+        audioRef.current.play().catch(() => {});
+      }
     }
   }, [volume]);
 
