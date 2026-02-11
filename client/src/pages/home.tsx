@@ -17,8 +17,11 @@ const LIBRARY_SONGS: Song[] = [
   { id: "10", title: "Skyline Chase", artist: "Neon Arcade", duration: 256 },
 ];
 
-// Generate 100 rungs for the initial queue
-const INITIAL_QUEUE: Song[] = Array.from({ length: 100 }, (_, i) => ({
+// Default queue size -- the helix virtualizes rendering so this can scale to thousands
+const DEFAULT_QUEUE_SIZE = 100;
+
+// Generate initial queue by cycling through the library
+const INITIAL_QUEUE: Song[] = Array.from({ length: DEFAULT_QUEUE_SIZE }, (_, i) => ({
   ...LIBRARY_SONGS[i % LIBRARY_SONGS.length],
   id: `queue-${i}`,
   isPlaying: i === 0,
@@ -65,9 +68,12 @@ export default function Home() {
           if (prev >= 100) {
             setQueue((q) => {
               const next = [...q.slice(1)];
-              if (next.length < 100) {
-                // Keep queue at 100 by recycling or pulling from library
-                const refill = { ...LIBRARY_SONGS[Math.floor(Math.random() * LIBRARY_SONGS.length)], id: `refill-${Date.now()}` };
+              // Refill to maintain queue depth by recycling from library
+              while (next.length < DEFAULT_QUEUE_SIZE) {
+                const refill = {
+                  ...LIBRARY_SONGS[Math.floor(Math.random() * LIBRARY_SONGS.length)],
+                  id: `refill-${Date.now()}-${next.length}`,
+                };
                 next.push(refill);
               }
               return next.map((s, idx) => ({ ...s, isPlaying: idx === 0 }));
@@ -94,9 +100,8 @@ export default function Home() {
       const newSong = { ...songData, id: `added-${Date.now()}`, isPlaying: false };
       
       setQueue((prev) => {
-        // Bump everything down after the currently playing song (index 0)
-        const nextQueue = [prev[0], newSong, ...prev.slice(1)];
-        return nextQueue.slice(0, 100); // Keep it at 100
+        // Insert after the currently playing song (index 0), bump everything down
+        return [prev[0], newSong, ...prev.slice(1)];
       });
     } catch (err) {
       console.error("Drop failed", err);
