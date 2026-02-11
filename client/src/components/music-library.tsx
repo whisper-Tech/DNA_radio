@@ -18,25 +18,16 @@ export function MusicLibrary({ songs, onDragStart, onSongClick }: MusicLibraryPr
   );
 
   return (
-    <div className="relative w-80 bg-black h-[calc(100vh-5rem)] flex flex-col">
-      <div
-        className="absolute inset-0 opacity-5 pointer-events-none"
-        style={{
-          background:
-            "repeating-linear-gradient(0deg, transparent, transparent 29px, rgba(0, 229, 255, 0.3) 29px, rgba(0, 229, 255, 0.3) 30px), repeating-linear-gradient(90deg, transparent, transparent 29px, rgba(0, 229, 255, 0.3) 29px, rgba(0, 229, 255, 0.3) 30px)",
-        }}
-      />
-
+    <div className="relative w-80 bg-black/40 backdrop-blur-md h-[calc(100vh-5rem)] flex flex-col border-l border-white/5">
       <div className="relative z-10 flex flex-col h-full">
         <div className="p-4 pb-2">
           <h2
             className="font-cyber uppercase tracking-widest text-sm text-[#00e5ff]"
             style={{
-              textShadow:
-                "0 0 10px rgba(0, 229, 255, 0.5), 0 0 20px rgba(0, 229, 255, 0.3)",
+              textShadow: "0 0 10px rgba(0, 229, 255, 0.5)",
             }}
           >
-            PERSONAL LIBRARY
+            THE SECRET PLAYLIST
           </h2>
         </div>
 
@@ -49,7 +40,7 @@ export function MusicLibrary({ songs, onDragStart, onSongClick }: MusicLibraryPr
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               data-testid="input-search-library"
-              className="w-full bg-gray-900 border border-gray-800 rounded-md pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:border-[#00e5ff] focus:ring-1 focus:ring-[#00e5ff]/30 focus:outline-none transition-colors"
+              className="w-full bg-white/5 border border-white/10 rounded-md pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:border-[#00e5ff] focus:ring-1 focus:ring-[#00e5ff]/30 focus:outline-none transition-colors"
             />
           </div>
         </div>
@@ -62,9 +53,9 @@ export function MusicLibrary({ songs, onDragStart, onSongClick }: MusicLibraryPr
               onDragStart={(e) => onDragStart(e, song)}
               onClick={() => onSongClick?.(song)}
               data-testid={`item-song-${song.id}`}
-              className="flex items-center gap-3 p-3 cursor-grab border-l-2 border-l-transparent hover:border-l-[#00e5ff]/50 hover:bg-white/5 rounded-r-md transition-colors"
+              className="flex items-center gap-3 p-3 cursor-grab border-l-2 border-l-transparent hover:border-l-[#00e5ff]/50 hover:bg-white/5 rounded-r-md transition-colors group"
             >
-              <div className="w-10 h-10 min-w-[40px] bg-gray-800 border border-[#00e5ff]/20 rounded-md flex items-center justify-center">
+              <div className="w-10 h-10 min-w-[40px] bg-white/5 border border-[#00e5ff]/20 rounded-md flex items-center justify-center group-hover:border-[#00e5ff]/50">
                 <Music className="w-4 h-4 text-[#00e5ff]/40" />
               </div>
               <div className="min-w-0 flex-1">

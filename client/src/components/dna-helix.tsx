@@ -1,6 +1,6 @@
 import { useRef, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Text, Line } from "@react-three/drei";
+import { Text, Line, Billboard } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { Song } from "@/types";
@@ -13,14 +13,15 @@ function HelixStrands({ songs }: { songs: Song[] }) {
   const groupRef = useRef<THREE.Group>(null!);
 
   useFrame((_state, delta) => {
-    groupRef.current.rotation.y += (Math.PI * 2) / 10 * delta;
+    // Very slow rotation: 120 seconds for full rotation
+    groupRef.current.rotation.y += (Math.PI * 2) / 120 * delta;
   });
 
-  const { strand1Points, strand2Points, spheres1, spheres2 } = useMemo(() => {
-    const height = 8;
-    const radius = 1.5;
-    const turns = 2.5;
-    const pointCount = 120;
+  const { strand1Points, strand2Points } = useMemo(() => {
+    const height = 40; // Increased height for 100 rungs
+    const radius = 1.8;
+    const turns = 8;
+    const pointCount = 300;
     const s1: THREE.Vector3[] = [];
     const s2: THREE.Vector3[] = [];
 
@@ -32,14 +33,14 @@ function HelixStrands({ songs }: { songs: Song[] }) {
       s2.push(new THREE.Vector3(Math.cos(angle + Math.PI) * radius, y, Math.sin(angle + Math.PI) * radius));
     }
 
-    return { strand1Points: s1, strand2Points: s2, spheres1: s1, spheres2: s2 };
+    return { strand1Points: s1, strand2Points: s2 };
   }, []);
 
   const rungs = useMemo(() => {
     if (songs.length === 0) return [];
-    const height = 8;
-    const radius = 1.5;
-    const turns = 2.5;
+    const height = 40;
+    const radius = 1.8;
+    const turns = 8;
 
     return songs.map((song, index) => {
       const t = songs.length === 1 ? 0.5 : index / (songs.length - 1);
@@ -55,28 +56,19 @@ function HelixStrands({ songs }: { songs: Song[] }) {
 
   return (
     <group ref={groupRef}>
-      {spheres1.map((pos, i) => (
-        <mesh key={`s1-${i}`} position={pos}>
-          <sphereGeometry args={[0.06, 8, 8]} />
-          <meshStandardMaterial color="#00e5ff" emissive="#00e5ff" emissiveIntensity={0.5} />
-        </mesh>
-      ))}
-      {spheres2.map((pos, i) => (
-        <mesh key={`s2-${i}`} position={pos}>
-          <sphereGeometry args={[0.06, 8, 8]} />
-          <meshStandardMaterial color="#00e5ff" emissive="#00e5ff" emissiveIntensity={0.5} />
-        </mesh>
-      ))}
-
       <Line
         points={strand1Points}
         color="#00e5ff"
-        lineWidth={2}
+        lineWidth={1}
+        transparent
+        opacity={0.2}
       />
       <Line
         points={strand2Points}
         color="#00e5ff"
-        lineWidth={2}
+        lineWidth={1}
+        transparent
+        opacity={0.2}
       />
 
       {rungs.map((rung, i) => {
@@ -85,38 +77,45 @@ function HelixStrands({ songs }: { songs: Song[] }) {
         const midPoint = rung.mid;
 
         return (
-          <group key={`rung-${i}`}>
-            <mesh position={midPoint} quaternion={new THREE.Quaternion().setFromUnitVectors(
+          <group key={`rung-${i}`} position={midPoint}>
+            <mesh rotation={new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(
               new THREE.Vector3(0, 1, 0),
               dir.clone().normalize()
-            )}>
-              <cylinderGeometry args={[0.03, 0.03, len, 8]} />
+            ))}>
+              <cylinderGeometry args={[0.015, 0.015, len, 8]} />
               <meshStandardMaterial
                 color="#00e5ff"
                 emissive="#00e5ff"
-                emissiveIntensity={rung.isTop ? 1.5 : 0.3}
+                emissiveIntensity={rung.isTop ? 2 : 0.4}
                 transparent
-                opacity={0.7}
+                opacity={0.5}
               />
             </mesh>
-            <Text
-              position={[midPoint.x + 2.2, midPoint.y + 0.1, midPoint.z]}
-              fontSize={0.15}
-              color="white"
-              anchorX="left"
-              anchorY="middle"
-            >
-              {rung.song.title}
-            </Text>
-            <Text
-              position={[midPoint.x + 2.2, midPoint.y - 0.1, midPoint.z]}
-              fontSize={0.12}
-              color="white"
-              anchorX="left"
-              anchorY="middle"
-            >
-              {rung.song.artist}
-            </Text>
+            <Billboard>
+              <group position={[2.5, 0, 0]}>
+                <Text
+                  fontSize={0.18}
+                  color="white"
+                  anchorX="left"
+                  anchorY="bottom"
+                  outlineWidth={0.02}
+                  outlineColor="black"
+                >
+                  {rung.song.title}
+                </Text>
+                <Text
+                  position={[0, -0.2, 0]}
+                  fontSize={0.14}
+                  color="#00e5ff"
+                  anchorX="left"
+                  anchorY="top"
+                  outlineWidth={0.01}
+                  outlineColor="black"
+                >
+                  {rung.song.artist}
+                </Text>
+              </group>
+            </Billboard>
           </group>
         );
       })}
@@ -127,38 +126,14 @@ function HelixStrands({ songs }: { songs: Song[] }) {
 function CircuitBackground() {
   const lines = useMemo(() => {
     const result: THREE.Vector3[][] = [];
-    const size = 12;
-    const step = 1.5;
+    const size = 30;
+    const step = 2;
 
     for (let x = -size; x <= size; x += step) {
-      result.push([
-        new THREE.Vector3(x, -size, -5),
-        new THREE.Vector3(x, size, -5),
-      ]);
+      result.push([new THREE.Vector3(x, -size, -8), new THREE.Vector3(x, size, -8)]);
     }
     for (let y = -size; y <= size; y += step) {
-      result.push([
-        new THREE.Vector3(-size, y, -5),
-        new THREE.Vector3(size, y, -5),
-      ]);
-    }
-
-    for (let i = 0; i < 20; i++) {
-      const sx = (Math.random() - 0.5) * size * 2;
-      const sy = (Math.random() - 0.5) * size * 2;
-      const horizontal = Math.random() > 0.5;
-      const len = 1 + Math.random() * 3;
-      if (horizontal) {
-        result.push([
-          new THREE.Vector3(sx, sy, -5),
-          new THREE.Vector3(sx + len, sy, -5),
-        ]);
-      } else {
-        result.push([
-          new THREE.Vector3(sx, sy, -5),
-          new THREE.Vector3(sx, sy + len, -5),
-        ]);
-      }
+      result.push([new THREE.Vector3(-size, y, -8), new THREE.Vector3(size, y, -8)]);
     }
 
     return result;
@@ -173,7 +148,7 @@ function CircuitBackground() {
           color="#00e5ff"
           lineWidth={0.5}
           transparent
-          opacity={0.07}
+          opacity={0.05}
         />
       ))}
     </group>
@@ -182,23 +157,22 @@ function CircuitBackground() {
 
 export function DNAHelix({ songs }: DNAHelixProps) {
   return (
-    <div data-testid="canvas-dna-helix" style={{ width: "100%", height: "100%" }}>
+    <div data-testid="canvas-dna-helix" className="w-full h-full bg-black">
       <Canvas
-        gl={{ alpha: false }}
-        camera={{ position: [0, 0, 10], fov: 50 }}
+        gl={{ alpha: false, antialias: true }}
+        camera={{ position: [0, 15, 12], fov: 45 }}
         onCreated={({ gl }) => {
           gl.setClearColor("#000000");
         }}
-        style={{ width: "100%", height: "100%" }}
       >
-        <ambientLight intensity={0.3} />
+        <ambientLight intensity={0.4} />
         <pointLight position={[10, 10, 10]} intensity={1} />
         <HelixStrands songs={songs} />
         <CircuitBackground />
         <EffectComposer>
           <Bloom
-            intensity={1.5}
-            luminanceThreshold={0.1}
+            intensity={1.2}
+            luminanceThreshold={0.2}
             luminanceSmoothing={0.9}
           />
         </EffectComposer>

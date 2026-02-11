@@ -15,111 +15,126 @@ const LIBRARY_SONGS: Song[] = [
   { id: "8", title: "Void Walker", artist: "Dark Circuit", duration: 301 },
   { id: "9", title: "Pulse Code", artist: "Hex Machine", duration: 223 },
   { id: "10", title: "Skyline Chase", artist: "Neon Arcade", duration: 256 },
-  { id: "11", title: "Memory Leak", artist: "Stack Overflow", duration: 194 },
-  { id: "12", title: "Zero Day", artist: "Firewall", duration: 287 },
-  { id: "13", title: "Laser Grid", artist: "Tron Legacy", duration: 210 },
-  { id: "14", title: "Data Stream", artist: "Byte Force", duration: 242 },
-  { id: "15", title: "Hologram", artist: "Virtual Echo", duration: 265 },
 ];
 
-const INITIAL_QUEUE: Song[] = [
-  { ...LIBRARY_SONGS[0], isPlaying: true },
-  { ...LIBRARY_SONGS[1], isPlaying: false },
-  { ...LIBRARY_SONGS[2], isPlaying: false },
-  { ...LIBRARY_SONGS[3], isPlaying: false },
-  { ...LIBRARY_SONGS[4], isPlaying: false },
-];
+// Generate 100 rungs for the initial queue
+const INITIAL_QUEUE: Song[] = Array.from({ length: 100 }, (_, i) => ({
+  ...LIBRARY_SONGS[i % LIBRARY_SONGS.length],
+  id: `queue-${i}`,
+  isPlaying: i === 0,
+}));
 
 export default function Home() {
   const [queue, setQueue] = useState<Song[]>(INITIAL_QUEUE);
-  const [isPlaying, setIsPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
-  const progressRef = useRef<number | null>(null);
+  const [volume, setVolume] = useState(0.5);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const progressIntervalRef = useRef<number | null>(null);
 
-  const currentSong = queue.find((s) => s.isPlaying) || queue[0] || null;
+  const currentSong = queue[0] || null;
 
   useEffect(() => {
-    if (isPlaying && currentSong) {
-      const duration = currentSong.duration || 240;
-      const increment = 100 / (duration * 10);
+    // Cyberpunk radio stream placeholder
+    audioRef.current = new Audio("https://stream.nightride.fm/nightride.mp3");
+    audioRef.current.volume = volume;
+    audioRef.current.play().catch(() => {
+      console.log("Autoplay blocked. Waiting for user interaction.");
+    });
 
-      progressRef.current = window.setInterval(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
+
+  useEffect(() => {
+    if (currentSong) {
+      const duration = currentSong.duration || 240;
+      const step = 100 / (duration * 10);
+      
+      progressIntervalRef.current = window.setInterval(() => {
         setProgress((prev) => {
           if (prev >= 100) {
             setQueue((q) => {
-              if (q.length <= 1) return q;
-              const next = q.slice(1);
-              next[0] = { ...next[0], isPlaying: true };
-              return next;
+              const next = [...q.slice(1)];
+              if (next.length < 100) {
+                // Keep queue at 100 by recycling or pulling from library
+                const refill = { ...LIBRARY_SONGS[Math.floor(Math.random() * LIBRARY_SONGS.length)], id: `refill-${Date.now()}` };
+                next.push(refill);
+              }
+              return next.map((s, idx) => ({ ...s, isPlaying: idx === 0 }));
             });
             return 0;
           }
-          return prev + increment;
+          return prev + step;
         });
       }, 100);
     }
-
     return () => {
-      if (progressRef.current) {
-        clearInterval(progressRef.current);
-        progressRef.current = null;
-      }
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
-  }, [isPlaying, currentSong?.id]);
-
-  const handlePlayPause = useCallback(() => {
-    setIsPlaying((prev) => !prev);
-  }, []);
+  }, [currentSong?.id]);
 
   const handleDragStart = useCallback((e: React.DragEvent, song: Song) => {
     e.dataTransfer.setData("application/json", JSON.stringify(song));
-    e.dataTransfer.effectAllowed = "copy";
   }, []);
 
-  const handleSongClick = useCallback((song: Song) => {
-    setQueue((prev) => {
-      const exists = prev.find((s) => s.id === song.id);
-      if (exists) return prev;
-      return [...prev, { ...song, isPlaying: false }];
-    });
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    try {
+      const songData = JSON.parse(e.dataTransfer.getData("application/json"));
+      const newSong = { ...songData, id: `added-${Date.now()}`, isPlaying: false };
+      
+      setQueue((prev) => {
+        // Bump everything down after the currently playing song (index 0)
+        const nextQueue = [prev[0], newSong, ...prev.slice(1)];
+        return nextQueue.slice(0, 100); // Keep it at 100
+      });
+    } catch (err) {
+      console.error("Drop failed", err);
+    }
   }, []);
+
+  const handleVote = useCallback((type: "accept" | "reject") => {
+    console.log(`Voted ${type} for ${currentSong?.title}`);
+    // Visual feedback or IP-based logic would go here
+  }, [currentSong]);
 
   return (
-    <div className="flex h-screen w-full bg-black" data-testid="page-home">
+    <div 
+      className="flex h-screen w-full bg-black overflow-hidden select-none" 
+      data-testid="page-home"
+      onClick={() => audioRef.current?.play()} // Unlock audio on first click
+    >
       <div
-        className="flex-1 relative pb-20"
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "copy";
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          try {
-            const song: Song = JSON.parse(e.dataTransfer.getData("application/json"));
-            setQueue((prev) => {
-              const exists = prev.find((s) => s.id === song.id);
-              if (exists) return prev;
-              return [...prev, { ...song, isPlaying: prev.length === 0 }];
-            });
-          } catch {}
-        }}
+        className="flex-1 relative"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
       >
         <DNAHelix songs={queue} />
       </div>
 
-      <div className="border-l border-[#00e5ff]/10">
+      <div className="relative z-10 border-l border-white/5">
         <MusicLibrary
           songs={LIBRARY_SONGS}
           onDragStart={handleDragStart}
-          onSongClick={handleSongClick}
         />
       </div>
 
       <NowPlayingBar
         currentSong={currentSong}
-        isPlaying={isPlaying}
         progress={progress}
-        onPlayPause={handlePlayPause}
+        volume={volume}
+        onVolumeChange={setVolume}
+        onVote={handleVote}
       />
     </div>
   );

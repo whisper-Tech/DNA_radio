@@ -4,6 +4,7 @@ export interface Song {
   artist: string;
   isPlaying?: boolean;
   duration?: number;
+  votes?: number;
 }
 
 export interface QueueSong extends Song {
