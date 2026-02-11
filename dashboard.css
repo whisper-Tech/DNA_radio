@@ -1,0 +1,126 @@
+/* dashboard.css - Cyberpunk Space styles for The Secret Dashboard */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+}
+
+.dashboard-container {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+.dashboard-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+  z-index: 10;
+}
+
+.header-text {
+  font-size: 1.5rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1px #06b6d4;
+  text-shadow: 0 0 10px #06b6d4;
+}
+
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background: #22d3ee;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #22d3ee;
+  animation: pulse 2s infinite;
+}
+
+.status-text {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  color: #22d3ee;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.canvas-container {
+  position: fixed;
+  inset: 0;
+  touch-action: none;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.song-sidebar {
+  position: fixed;
+  right: 0;
+  top: 5rem;
+  bottom: 0;
+  width: 200px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  border-left: 1px solid rgba(6,182,212,0.2);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.sidebar-title {
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  color: #22d3ee;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(6,182,212,0.3);
+}
+
+.drop-zone {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1rem 2rem;
+  border: 1px dashed rgba(6,182,212,0.4);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.drop-zone.drag-over {
+  border-color: #22d3ee;
+  background: rgba(6,182,212,0.1);
+}
+
+.drop-text {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  color: #22d3ee;
+  pointer-events: none;
+}

@@ -1,0 +1,79 @@
+/* entry.css - Cyberpunk Space styles for The Gate */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+}
+
+.entry-container {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+.star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  animation: twinkle 5s infinite ease-in-out;
+}
+
+.gate-star {
+  width: 8px !important;
+  height: 8px !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 10px #06b6d4) drop-shadow(0 0 20px #0891b2);
+  cursor: pointer;
+  transition: filter 0.3s ease;
+}
+
+.gate-star:hover {
+  filter: drop-shadow(0 0 15px #22d3ee) drop-shadow(0 0 30px #06b6d4);
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.8; }
+}
+
+.sequence-text {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 2rem;
+  letter-spacing: 0.5em;
+  text-transform: lowercase;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hidden {
+  display: none;
+}
+
+#main-header {
+  position: fixed;
+  top: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.header-text {
+  font-size: 1.5rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1px #06b6d4;
+  text-shadow: 0 0 10px #06b6d4;
+}

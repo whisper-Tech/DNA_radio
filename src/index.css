@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: black;
+  color: white;
+}
+
+.traumacore-mode {
+  filter: sepia(0.5) hue-rotate(-50deg) contrast(1.2) saturate(1.5);
+  animation: jitter 0.1s infinite alternate;
+}
+
+.traumacore-mode canvas {
+  filter: grayscale(0.2) contrast(1.5);
+}
+
+@keyframes jitter {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(1px, 1px); }
+}
