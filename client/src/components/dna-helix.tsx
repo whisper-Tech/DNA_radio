@@ -399,7 +399,6 @@ interface DNAHelixProps {
 }
 
 export function DNAHelix({ songs }: DNAHelixProps) {
-  console.log("[v0] DNAHelix rendered with", songs.length, "songs");
   const glConfig = useMemo(
     () => ({
       alpha: false,
