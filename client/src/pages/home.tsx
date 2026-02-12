@@ -28,7 +28,6 @@ const INITIAL_QUEUE: Song[] = Array.from({ length: DEFAULT_QUEUE_SIZE }, (_, i) 
 }));
 
 export default function Home() {
-  console.log("[v0] Home component rendering");
   const [queue, setQueue] = useState<Song[]>(INITIAL_QUEUE);
   const [progress, setProgress] = useState(0);
   const [volume, setVolume] = useState(0);

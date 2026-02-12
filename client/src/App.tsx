@@ -7,27 +7,15 @@ import Home from "@/pages/home";
 import NotFound from "@/pages/not-found";
 
 function Router() {
-  console.log("[v0] Router rendering, Home component:", Home);
   return (
     <Switch>
-      <Route path="/">
-        {() => {
-          console.log("[v0] Route matched: /");
-          return <Home />;
-        }}
-      </Route>
-      <Route>
-        {() => {
-          console.log("[v0] Route matched: NotFound (catch-all)");
-          return <NotFound />;
-        }}
-      </Route>
+      <Route path="/" component={Home} />
+      <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
-  console.log("[v0] App rendering, Router:", Router);
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
