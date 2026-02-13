@@ -204,7 +204,7 @@
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border/50;
   }
 
   body {
