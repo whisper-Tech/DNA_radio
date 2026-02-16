@@ -79,7 +79,7 @@ class RadioState extends EventEmitter {
       // Pre-resolve YouTube ID for current song
       const currentSong = this.playlist[this.currentIndex];
       if (currentSong && !currentSong.youtubeId) {
-        currentSong.youtubeId = await getYoutubeId(currentSong.title, currentSong.artist);
+        currentSong.youtubeId = await getYoutubeId(currentSong.title, currentSong.artist, currentSong.duration);
         if (this.dbAvailable) {
           await db.updateSong(currentSong.id, { youtubeId: currentSong.youtubeId });
         }
@@ -109,7 +109,7 @@ class RadioState extends EventEmitter {
       if (tracks.length > 0) {
         this.playlist = tracks;
         const firstSong = this.playlist[0];
-        firstSong.youtubeId = await getYoutubeId(firstSong.title, firstSong.artist);
+        firstSong.youtubeId = await getYoutubeId(firstSong.title, firstSong.artist, firstSong.duration);
         this.prefetchNextSong();
         this.emit('update', this.state);
       } else {
@@ -148,7 +148,7 @@ class RadioState extends EventEmitter {
       
       if (nextSong && !nextSong.youtubeId) {
         console.log(`[PREFETCH] Loading YouTube ID for: "${nextSong.title}"`);
-        const youtubeId = await getYoutubeId(nextSong.title, nextSong.artist);
+        const youtubeId = await getYoutubeId(nextSong.title, nextSong.artist, nextSong.duration);
         nextSong.youtubeId = youtubeId;
         if (this.dbAvailable) {
           await db.updateSong(nextSong.id, { youtubeId });
@@ -198,7 +198,7 @@ class RadioState extends EventEmitter {
 
       // Resolve YouTube ID if needed
       if (!nextSong.youtubeId) {
-        nextSong.youtubeId = await getYoutubeId(nextSong.title, nextSong.artist);
+        nextSong.youtubeId = await getYoutubeId(nextSong.title, nextSong.artist, nextSong.duration);
         if (this.dbAvailable) {
           await db.updateSong(nextSong.id, { youtubeId: nextSong.youtubeId });
         }
@@ -285,7 +285,7 @@ class RadioState extends EventEmitter {
 
       console.log(`[RADIO] AI Suggestion picked: "${pick.title}" by ${pick.artist}`);
 
-      const youtubeId = await getYoutubeId(pick.title, pick.artist);
+      const youtubeId = await getYoutubeId(pick.title, pick.artist, 180000);
       const newSongData = {
         id: `ai_${Date.now()}_${randomBytes(4).toString('hex')}`,
         title: pick.title,

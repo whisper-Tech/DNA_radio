@@ -10,5 +10,4 @@ export type PlaylistTrack = {
 };
 
 export function getPlaylistTracks(playlistUrl: string): Promise<PlaylistTrack[]>;
-export function getYoutubeId(title: string, artist: string): Promise<string | null>;
-
+export function getYoutubeId(title: string, artist: string, durationMs?: number | null): Promise<string | null>;

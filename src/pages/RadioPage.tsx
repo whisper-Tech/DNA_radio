@@ -12,7 +12,7 @@ import {
 } from '@react-three/postprocessing';
 import { BlendFunction, GlitchMode } from 'postprocessing';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, XCircle, Play, Pause, Radio, Wifi, WifiOff, SkipForward, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { Heart, XCircle, Radio, Wifi, WifiOff, SkipForward, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import ReactPlayer from 'react-player';
 import * as THREE from 'three';
@@ -92,11 +92,7 @@ const RadioPage: React.FC = () => {
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [socketError, setSocketError] = useState<string | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const [useFallbackStream, setUseFallbackStream] = useState(false);
   const [fxEnabled, setFxEnabled] = useState(false);
-  const playerErrorCountRef = useRef(0);
-  const fallbackAudioRef = useRef<HTMLAudioElement | null>(null);
-  const FALLBACK_STREAM_URL = 'https://stream.nightride.fm/nightride.mp3';
 
   // Get upcoming songs for queue
   const upcomingSongs = playlist.slice(currentIndex + 1, currentIndex + 6);
@@ -388,6 +384,8 @@ const RadioPage: React.FC = () => {
 
   const handleVote = (type: 'accept' | 'reject') => {
     if (!socket || !currentSong) return;
+    setAudioUnlocked(true);
+    setPlayerError(null);
     socket.emit('vote', { songId: currentSong.id, type });
     
     // Visual feedback for reject vote
@@ -402,40 +400,6 @@ const RadioPage: React.FC = () => {
     socket.emit('select_suggestion', { index });
     setPendingSuggestions(null);
   };
-
-  const handleSkip = () => {
-    if (!socket) return;
-    socket.emit('skip');
-    setGlitchIntensity(0.3);
-    setTimeout(() => setGlitchIntensity(0), 200);
-  };
-
-  const handlePlayPause = () => {
-    // User gesture unlocks media playback policies in modern browsers.
-    setAudioUnlocked(true);
-    setPlayerError(null);
-    if (!socket) return;
-    socket.emit('toggle_playback');
-    setGlitchIntensity(0.2);
-    setTimeout(() => setGlitchIntensity(0), 150);
-  };
-
-  useEffect(() => {
-    if (!fallbackAudioRef.current) return;
-    fallbackAudioRef.current.volume = volume;
-  }, [volume]);
-
-  useEffect(() => {
-    if (!fallbackAudioRef.current) return;
-    if (!audioUnlocked) return;
-    if (isPlaying) {
-      fallbackAudioRef.current.play().catch((err) => {
-        console.warn('[FALLBACK_AUDIO] play failed:', err);
-      });
-    } else {
-      fallbackAudioRef.current.pause();
-    }
-  }, [isPlaying, audioUnlocked, useFallbackStream]);
 
   // Handle player ready
   const handlePlayerReady = () => {
@@ -504,7 +468,7 @@ const RadioPage: React.FC = () => {
       {/* Hidden Audio Player with improved sync */}
       {/* Use offscreen/0-size instead of display:none; some embeds won't play when hidden. */}
       <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
-        {!useFallbackStream && currentSong.youtubeId && (
+        {currentSong.youtubeId && (
           <ReactPlayerAny
             ref={playerRef}
             playing={isPlaying && audioUnlocked}
@@ -517,11 +481,6 @@ const RadioPage: React.FC = () => {
                 setPlayerError('autoplay_blocked_click_play');
               } else {
                 setPlayerError(msg);
-              }
-              playerErrorCountRef.current += 1;
-              if (playerErrorCountRef.current >= 3) {
-                console.warn('[PLAYER] Switching to fallback stream after repeated failures');
-                setUseFallbackStream(true);
               }
             }}
             onProgress={(e: any) => {
@@ -541,16 +500,6 @@ const RadioPage: React.FC = () => {
               }
             } as any}
             url={`https://www.youtube.com/watch?v=${currentSong.youtubeId}`}
-          />
-        )}
-        {useFallbackStream && (
-          <audio
-            ref={fallbackAudioRef}
-            src={FALLBACK_STREAM_URL}
-            autoPlay={isPlaying && audioUnlocked}
-            controls={false}
-            loop={false}
-            preload="none"
           />
         )}
       </div>
@@ -695,14 +644,9 @@ const RadioPage: React.FC = () => {
                   {socketError ? `NET:${socketError}` : `AUDIO:${playerError}`}
                 </div>
               )}
-              {useFallbackStream && (
-                <div className="text-[10px] font-mono tracking-widest text-cyan-400/70">
-                  AUDIO_MODE:FALLBACK_STREAM
-                </div>
-              )}
               {!audioUnlocked && (
                 <div className="text-[10px] font-mono tracking-widest text-yellow-400/70">
-                  AUDIO_LOCKED_CLICK_PLAY
+                  AUDIO_LOCKED_CLICK_ENABLE_AUDIO
                 </div>
               )}
               {isConnected && (
@@ -775,7 +719,7 @@ const RadioPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Control Buttons */}
+                {/* Vote Buttons */}
                 <div className="flex items-center justify-center gap-12 mb-10">
                   <motion.button 
                     onClick={() => handleVote('reject')} 
@@ -783,45 +727,13 @@ const RadioPage: React.FC = () => {
                     whileTap={{ scale: 0.95 }}
                     className="group flex flex-col items-center gap-3"
                   >
-                    <div className="p-6 rounded-2xl bg-red-500/5 border border-red-500/20 group-hover:bg-red-500/20 group-hover:border-red-500/40 transition-all duration-500">
-                      <XCircle className="w-8 h-8 text-red-500/70 group-hover:text-red-500" />
+                    <div className="p-6 rounded-2xl bg-cyan-500/5 border border-cyan-300/20 group-hover:bg-cyan-300/15 group-hover:border-cyan-300/50 transition-all duration-500">
+                      <Heart className="w-8 h-8 text-cyan-300/70 group-hover:text-cyan-200" />
                     </div>
-                    <span className="text-[9px] text-red-500/40 font-mono font-bold uppercase tracking-[0.3em] group-hover:text-red-500 transition-colors">
-                      Terminate
+                    <span className="text-[9px] text-cyan-300/40 font-mono font-bold uppercase tracking-[0.3em] group-hover:text-cyan-200 transition-colors">
+                      Hate
                     </span>
                   </motion.button>
-
-                  <div className="flex items-center gap-4">
-                    <motion.button
-                      onClick={handleSkip}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="group flex flex-col items-center gap-3"
-                    >
-                      <div className="p-4 rounded-full bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 transition-all">
-                        <SkipForward className="w-6 h-6 text-white/70 group-hover:text-white rotate-90" />
-                      </div>
-                      <span className="text-[8px] text-white/30 font-mono uppercase tracking-wider group-hover:text-white/50 transition-colors">
-                        SKIP
-                      </span>
-                    </motion.button>
-
-                    <motion.button 
-                      onClick={handlePlayPause}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="relative group"
-                    >
-                      <div className="absolute inset-0 bg-cyan-400 blur-xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-                      <div className="relative p-10 rounded-full bg-white text-black transition-transform duration-500">
-                        {isPlaying ? (
-                          <Pause className="w-10 h-10 fill-black" />
-                        ) : (
-                          <Play className="w-10 h-10 fill-black ml-1" />
-                        )}
-                      </div>
-                    </motion.button>
-                  </div>
 
                   <motion.button 
                     onClick={() => handleVote('accept')} 
@@ -829,11 +741,11 @@ const RadioPage: React.FC = () => {
                     whileTap={{ scale: 0.95 }}
                     className="group flex flex-col items-center gap-3"
                   >
-                    <div className="p-6 rounded-2xl bg-green-500/5 border border-green-500/20 group-hover:bg-green-500/20 group-hover:border-green-500/40 transition-all duration-500">
-                      <Heart className="w-8 h-8 text-green-500/70 group-hover:text-green-500" />
+                    <div className="p-6 rounded-2xl bg-black/70 border border-pink-400/40 group-hover:bg-pink-500/10 group-hover:border-pink-300/70 transition-all duration-500">
+                      <Heart className="w-8 h-8 text-pink-400 group-hover:text-pink-300" />
                     </div>
-                    <span className="text-[9px] text-green-500/40 font-mono font-bold uppercase tracking-[0.3em] group-hover:text-green-500 transition-colors">
-                      Validate
+                    <span className="text-[9px] text-pink-400/50 font-mono font-bold uppercase tracking-[0.3em] group-hover:text-pink-300 transition-colors">
+                      Love
                     </span>
                   </motion.button>
                 </div>
@@ -870,12 +782,15 @@ const RadioPage: React.FC = () => {
                     >
                       {fxEnabled ? 'FX_HIGH' : 'FX_LOW'}
                     </button>
-                    {!useFallbackStream && (
+                    {!audioUnlocked && (
                       <button
-                        onClick={() => setUseFallbackStream(true)}
+                        onClick={() => {
+                          setAudioUnlocked(true);
+                          setPlayerError(null);
+                        }}
                         className="px-3 py-1 rounded-lg border border-cyan-500/30 text-[9px] font-mono tracking-widest text-cyan-300/80 hover:bg-cyan-500/10"
                       >
-                        FORCE_STREAM
+                        ENABLE_AUDIO
                       </button>
                     )}
                   </div>

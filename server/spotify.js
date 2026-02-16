@@ -79,11 +79,48 @@ export const getPlaylistTracks = async (playlistUrl) => {
 };
 
 // Find the best YouTube match for a track
-export const getYoutubeId = async (title, artist) => {
+const normalize = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .replace(/[\(\)\[\]\{\}\-\_\.\,\!\?\'\"]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+export const getYoutubeId = async (title, artist, durationMs = null) => {
   try {
     const query = `${title} ${artist} official audio`;
     const r = await yts(query);
-    const video = r.videos[0];
+    const videos = Array.isArray(r?.videos) ? r.videos.slice(0, 15) : [];
+    if (!videos.length) return null;
+
+    const nt = normalize(title);
+    const na = normalize(artist);
+    const targetSec = typeof durationMs === 'number' && durationMs > 0 ? durationMs / 1000 : null;
+
+    const scoreVideo = (v) => {
+      const vt = normalize(v.title);
+      let score = 0;
+
+      if (vt.includes(na)) score += 40;
+      if (vt.includes(nt)) score += 45;
+      if (vt.includes('official') && vt.includes('audio')) score += 20;
+      if (vt.includes('lyrics')) score -= 5;
+      if (vt.includes('live')) score -= 20;
+      if (vt.includes('cover')) score -= 25;
+
+      if (targetSec && typeof v.seconds === 'number') {
+        const delta = Math.abs(v.seconds - targetSec);
+        score -= Math.min(35, delta / 4);
+      }
+
+      return score;
+    };
+
+    const ranked = videos
+      .map((v) => ({ v, score: scoreVideo(v) }))
+      .sort((a, b) => b.score - a.score);
+
+    const video = ranked[0]?.v || null;
     return video ? video.videoId : null;
   } catch (err) {
     console.error('[YOUTUBE] Search failed:', err.message);
