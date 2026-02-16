@@ -130,6 +130,7 @@ io.on('connection', async (socket) => {
       const clientInfo = connectedClients.get(socket.id);
       if (!clientInfo) return;
       console.log(`[SKIP] Skip requested by ${clientInfo.userId}`);
+      await radio.nextSong(true);
     } catch (err) {
       console.error('[SOCKET] Error handling skip:', err);
     }

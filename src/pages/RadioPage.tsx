@@ -18,8 +18,6 @@ import ReactPlayer from 'react-player';
 import * as THREE from 'three';
 import { DNAHelix } from '../components/DNAHelix';
 
-// `react-player` types can conflict with duplicate React type packages in this workspace.
-// Treat it as `any` to keep `tsc` green without affecting runtime behavior.
 const ReactPlayerAny: any = ReactPlayer;
 const EffectComposerAny: any = EffectComposer;
 
@@ -142,6 +140,8 @@ const RadioPage: React.FC = () => {
   const [fxEnabled, setFxEnabled] = useState(false);
   const [autoFxDowngraded, setAutoFxDowngraded] = useState(false);
   const [fpsEstimate, setFpsEstimate] = useState(60);
+  const autoSkipRef = useRef({ windowStart: Date.now(), count: 0, lastAt: 0 });
+  const lastPlayingAtRef = useRef(0);
 
   useEffect(() => {
     try {
@@ -370,14 +370,14 @@ const RadioPage: React.FC = () => {
     if (!isPlaying || !playerRef.current || !isConnected || !playerReady) return;
 
     const syncPlayback = () => {
-      if (!playerRef.current || typeof playerRef.current.getCurrentTime !== 'function') return;
+      if (!playerRef.current) return;
 
       // Calculate expected position using server time offset
       const correctedServerTime = Date.now() + serverTimeOffset;
       const expectedPositionMs = correctedServerTime - serverSongStartTime;
       const expectedPositionSec = expectedPositionMs / 1000;
       
-      const actualPositionSec = playerRef.current.getCurrentTime() || 0;
+      const actualPositionSec = getPlayerCurrentSeconds();
       const driftMs = (actualPositionSec * 1000) - expectedPositionMs;
       
       setLastSyncDrift(driftMs);
@@ -393,7 +393,7 @@ const RadioPage: React.FC = () => {
         const maxPosition = (currentSong?.duration || 180000) / 1000;
         const targetPosition = Math.min(Math.max(0, expectedPositionSec), maxPosition);
         
-        playerRef.current.seekTo(targetPosition, 'seconds');
+        seekPlayerToSeconds(targetPosition);
         // setIsSyncing(true);
         setTimeout(() => setIsSyncing(false), 500);
       }
@@ -464,6 +464,46 @@ const RadioPage: React.FC = () => {
     setPendingSuggestions(null);
   };
 
+  function getPlayerCurrentSeconds() {
+    const player: any = playerRef.current;
+    if (!player) return 0;
+    if (typeof player.getCurrentTime === 'function') {
+      return player.getCurrentTime() || 0;
+    }
+    if (typeof player.currentTime === 'number') {
+      return player.currentTime || 0;
+    }
+    const internal = player.getInternalPlayer?.();
+    if (typeof internal?.getCurrentTime === 'function') {
+      return internal.getCurrentTime() || 0;
+    }
+    if (typeof internal?.currentTime === 'number') {
+      return internal.currentTime || 0;
+    }
+    return 0;
+  }
+
+  function seekPlayerToSeconds(targetSeconds: number) {
+    const player: any = playerRef.current;
+    if (!player) return;
+    if (typeof player.seekTo === 'function') {
+      player.seekTo(targetSeconds, 'seconds');
+      return;
+    }
+    if ('currentTime' in player) {
+      player.currentTime = targetSeconds;
+      return;
+    }
+    const internal = player.getInternalPlayer?.();
+    if (typeof internal?.seekTo === 'function') {
+      internal.seekTo(targetSeconds, 'seconds');
+      return;
+    }
+    if (internal && 'currentTime' in internal) {
+      internal.currentTime = targetSeconds;
+    }
+  }
+
   // Handle player ready
   const handlePlayerReady = () => {
     setPlayerReady(true);
@@ -474,14 +514,18 @@ const RadioPage: React.FC = () => {
     const expectedPositionSec = (correctedServerTime - serverSongStartTime) / 1000;
     
     if (expectedPositionSec > 0) {
-      playerRef.current.seekTo(expectedPositionSec, 'seconds');
+      seekPlayerToSeconds(expectedPositionSec);
     }
   };
 
   const kickStartPlayback = useCallback(() => {
     if (!playerRef.current || !audioUnlocked || !isPlaying) return;
     try {
-      const internal: any = playerRef.current.getInternalPlayer?.();
+      const player: any = playerRef.current;
+      if (typeof player.play === 'function') {
+        Promise.resolve(player.play()).catch(() => {});
+      }
+      const internal: any = player.getInternalPlayer?.();
       if (internal?.playVideo) {
         internal.playVideo();
       }
@@ -497,6 +541,23 @@ const RadioPage: React.FC = () => {
   }, [audioUnlocked, isPlaying, volume]);
 
   useEffect(() => {
+    if (!playerRef.current) return;
+    playerRef.current.volume = Math.max(0, Math.min(1, volume));
+  }, [volume]);
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    if (isPlaying && audioUnlocked) {
+      player.play().catch((err: any) => {
+        console.warn('[PLAYER] play() failed:', err?.message || err);
+      });
+    } else {
+      player.pause();
+    }
+  }, [isPlaying, audioUnlocked, currentSong?.youtubeId]);
+
+  useEffect(() => {
     if (!audioUnlocked || !isPlaying || !currentSong?.youtubeId) return;
     let tries = 0;
     const maxTries = 8;
@@ -507,6 +568,27 @@ const RadioPage: React.FC = () => {
     }, 350);
     return () => clearInterval(timer);
   }, [audioUnlocked, isPlaying, currentSong?.youtubeId, kickStartPlayback]);
+
+  useEffect(() => {
+    if (!audioUnlocked || !isPlaying || !socket || !currentSong?.id) return;
+    const timeout = setTimeout(() => {
+      const silenceFor = Date.now() - (lastPlayingAtRef.current || 0);
+      if (silenceFor > 8000) {
+        const now = Date.now();
+        if (now - autoSkipRef.current.windowStart > 60000) {
+          autoSkipRef.current.windowStart = now;
+          autoSkipRef.current.count = 0;
+        }
+        if (now - autoSkipRef.current.lastAt > 2500 && autoSkipRef.current.count < 8) {
+          autoSkipRef.current.lastAt = now;
+          autoSkipRef.current.count += 1;
+          setPlayerError('no_playback_auto_skip');
+          socket.emit('skip');
+        }
+      }
+    }, 9000);
+    return () => clearTimeout(timeout);
+  }, [audioUnlocked, isPlaying, socket, currentSong?.id]);
 
   if (!currentSong) {
     return (
@@ -561,8 +643,7 @@ const RadioPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Hidden Audio Player with improved sync */}
-      {/* Keep a real-sized offscreen iframe; some browsers throttle tiny hidden embeds aggressively. */}
+      {/* Hidden Audio Player */}
       <div style={{ position: 'absolute', left: -10000, top: 0, width: 320, height: 180, overflow: 'hidden', opacity: 0.01, pointerEvents: 'none' }}>
         {currentSong.youtubeId && (
           <ReactPlayerAny
@@ -571,34 +652,50 @@ const RadioPage: React.FC = () => {
             muted={false}
             volume={volume}
             onReady={handlePlayerReady}
+            onPlaying={() => {
+              lastPlayingAtRef.current = Date.now();
+              setPlayerError(null);
+              console.log('[PLAYER] onPlaying');
+            }}
             onError={(e: any) => {
-              console.error('[PLAYER] Error:', e);
-              const msg = (e && (e.name || e.message)) ? String(e.name || e.message) : 'player_error';
-              if (msg.toLowerCase().includes('notallowed')) {
+              const mediaError = e?.currentTarget?.error;
+              const detail = {
+                name: e?.name,
+                eventMessage: e?.message,
+                code: mediaError?.code,
+                mediaMessage: mediaError?.message,
+                data: e?.data,
+              };
+              console.error('[PLAYER] Error:', detail);
+              const msg = (e && (e.name || e.message || e.data)) ? String(e.name || e.message || e.data) : `player_error_${mediaError?.code || 'unknown'}`;
+              const lower = msg.toLowerCase();
+              if (lower.includes('notallowed')) {
                 setPlayerError('autoplay_blocked_click_play');
               } else {
                 setPlayerError(msg);
               }
-            }}
-            onProgress={(e: any) => {
-              const { playedSeconds } = e;
-              // Only update if not syncing to avoid jumps
-              if (!isSyncing) {
-                setCurrentTime(playedSeconds * 1000);
-              }
-            }}
-            config={{
-              youtube: {
-                playerVars: {
-                  autoplay: 1,
-                  disablekb: 1,
-                  modestbranding: 1,
-                  playsinline: 1,
-                  rel: 0,
+
+              if (audioUnlocked && socket) {
+                const now = Date.now();
+                if (now - autoSkipRef.current.windowStart > 60000) {
+                  autoSkipRef.current.windowStart = now;
+                  autoSkipRef.current.count = 0;
+                }
+                if (now - autoSkipRef.current.lastAt > 2500 && autoSkipRef.current.count < 8) {
+                  autoSkipRef.current.lastAt = now;
+                  autoSkipRef.current.count += 1;
+                  setPlayerError('player_error_auto_skip');
+                  console.warn('[PLAYER] auto-skip emitting skip');
+                  socket.emit('skip');
                 }
               }
-            } as any}
-            url={`https://www.youtube.com/watch?v=${currentSong.youtubeId}`}
+            }}
+            onProgress={(e: any) => {
+              if (!isSyncing) {
+                setCurrentTime((e?.playedSeconds || 0) * 1000);
+              }
+            }}
+            src={`https://www.youtube.com/watch?v=${currentSong.youtubeId}`}
           />
         )}
       </div>
@@ -927,7 +1024,7 @@ const RadioPage: React.FC = () => {
                       className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-600 relative" 
                       initial={{ width: "0%" }} 
                       animate={{ 
-                        width: `${Math.min(100, (currentTime / (currentSong.duration || 180000)) * 100)}%` 
+                        width: `${Math.min(100, Math.max(0, (currentTime / Math.max(1, Number(currentSong.duration) || 180000)) * 100))}%`
                       }}
                       transition={{ duration: 0.1 }}
                     >

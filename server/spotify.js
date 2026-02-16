@@ -3,6 +3,7 @@ import pkg from 'spotify-url-info';
 const { getTracks } = pkg(fetch);
 import yts from 'yt-search';
 import SpotifyWebApi from 'spotify-web-api-node';
+const embeddableCache = new Map();
 
 function parsePlaylistId(playlistUrl) {
   if (!playlistUrl) return null;
@@ -81,21 +82,26 @@ export const getPlaylistTracks = async (playlistUrl) => {
 // Find the best YouTube match for a track
 const normalize = (s) =>
   String(s || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[\(\)\[\]\{\}\-\_\.\,\!\?\'\"]/g, ' ')
+    .replace(/[^\w\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
 export const getYoutubeId = async (title, artist, durationMs = null) => {
   try {
-    const query = `${title} ${artist} official audio`;
-    const r = await yts(query);
-    const videos = Array.isArray(r?.videos) ? r.videos.slice(0, 15) : [];
-    if (!videos.length) return null;
-
     const nt = normalize(title);
     const na = normalize(artist);
     const targetSec = typeof durationMs === 'number' && durationMs > 0 ? durationMs / 1000 : null;
+    const querySet = [
+      `${title} ${artist} official audio`,
+      `${title} ${artist}`,
+      `${title} official audio`,
+      `${title} song`,
+      `${nt} ${na}`.trim(),
+    ].filter(Boolean);
 
     const scoreVideo = (v) => {
       const vt = normalize(v.title);
@@ -116,14 +122,53 @@ export const getYoutubeId = async (title, artist, durationMs = null) => {
       return score;
     };
 
-    const ranked = videos
+    const allVideos = [];
+    const seen = new Set();
+    for (const query of querySet) {
+      const r = await yts(query);
+      const videos = Array.isArray(r?.videos) ? r.videos.slice(0, 12) : [];
+      for (const v of videos) {
+        if (!v?.videoId || seen.has(v.videoId)) continue;
+        seen.add(v.videoId);
+        allVideos.push(v);
+      }
+      if (allVideos.length >= 20) break;
+    }
+
+    if (!allVideos.length) return null;
+
+    const ranked = allVideos
       .map((v) => ({ v, score: scoreVideo(v) }))
       .sort((a, b) => b.score - a.score);
+    const topCandidates = ranked.slice(0, 8).map((r) => r.v);
 
-    const video = ranked[0]?.v || null;
-    return video ? video.videoId : null;
+    for (const video of topCandidates) {
+      if (!video?.videoId) continue;
+      const embeddable = await isEmbeddable(video.videoId);
+      if (embeddable) return video.videoId;
+    }
+
+    return ranked[0]?.v?.videoId || null;
   } catch (err) {
     console.error('[YOUTUBE] Search failed:', err.message);
     return null;
   }
 };
+
+async function isEmbeddable(videoId) {
+  if (!videoId) return false;
+  if (embeddableCache.has(videoId)) return embeddableCache.get(videoId);
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const resp = await fetch(oembedUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+    const ok = resp.ok;
+    embeddableCache.set(videoId, ok);
+    return ok;
+  } catch {
+    embeddableCache.set(videoId, false);
+    return false;
+  }
+}

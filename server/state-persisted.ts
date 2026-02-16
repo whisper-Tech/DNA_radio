@@ -17,6 +17,8 @@ class RadioState extends EventEmitter {
   currentPlayId: any;
   listenerCount_: number;
   dbAvailable: boolean;
+  youtubeHydrationTimer: any;
+  isResolvingCurrentSong: boolean;
 
   constructor() {
     super();
@@ -32,6 +34,8 @@ class RadioState extends EventEmitter {
     this.currentPlayId = null;
     this.listenerCount_ = 0;
     this.dbAvailable = db.isDbEnabled();
+    this.youtubeHydrationTimer = null;
+    this.isResolvingCurrentSong = false;
     
     this.init();
   }
@@ -79,10 +83,7 @@ class RadioState extends EventEmitter {
       // Pre-resolve YouTube ID for current song
       const currentSong = this.playlist[this.currentIndex];
       if (currentSong && !currentSong.youtubeId) {
-        currentSong.youtubeId = await getYoutubeId(currentSong.title, currentSong.artist, currentSong.duration);
-        if (this.dbAvailable) {
-          await db.updateSong(currentSong.id, { youtubeId: currentSong.youtubeId });
-        }
+        await this.resolveSongYoutubeId(currentSong);
       }
       
       // Pre-fetch next song's YouTube ID
@@ -109,7 +110,7 @@ class RadioState extends EventEmitter {
       if (tracks.length > 0) {
         this.playlist = tracks;
         const firstSong = this.playlist[0];
-        firstSong.youtubeId = await getYoutubeId(firstSong.title, firstSong.artist, firstSong.duration);
+        await this.resolveSongYoutubeId(firstSong);
         this.prefetchNextSong();
         this.emit('update', this.state);
       } else {
@@ -126,6 +127,8 @@ class RadioState extends EventEmitter {
     }
     
     this.checkSongEnd();
+    this.hydrateUpcomingYoutubeIds(12).catch(() => {});
+    this.startYoutubeHydrationLoop();
   }
 
   get state() {
@@ -148,16 +151,49 @@ class RadioState extends EventEmitter {
       
       if (nextSong && !nextSong.youtubeId) {
         console.log(`[PREFETCH] Loading YouTube ID for: "${nextSong.title}"`);
-        const youtubeId = await getYoutubeId(nextSong.title, nextSong.artist, nextSong.duration);
-        nextSong.youtubeId = youtubeId;
-        if (this.dbAvailable) {
-          await db.updateSong(nextSong.id, { youtubeId });
-        }
+        await this.resolveSongYoutubeId(nextSong);
       }
     } catch (err) {
       console.error('[PREFETCH] Error prefetching next song:', err);
       // Don't hard-disable everything; prefetch is optional.
     }
+  }
+
+  async resolveSongYoutubeId(song: any) {
+    if (!song || song.youtubeId) return song?.youtubeId || null;
+    const youtubeId = await getYoutubeId(song.title, song.artist, song.duration);
+    if (youtubeId) {
+      song.youtubeId = youtubeId;
+      if (this.dbAvailable) {
+        await db.updateSong(song.id, { youtubeId });
+      }
+    }
+    return song.youtubeId || null;
+  }
+
+  async hydrateUpcomingYoutubeIds(maxToResolve = 8) {
+    if (!this.playlist?.length) return;
+    let resolved = 0;
+    let index = this.currentIndex;
+    for (let i = 0; i < this.playlist.length && resolved < maxToResolve; i++) {
+      index = this.getNextValidIndex(index);
+      const song = this.playlist[index];
+      if (!song || song.status === 'removed' || song.youtubeId) continue;
+      const youtubeId = await this.resolveSongYoutubeId(song);
+      if (youtubeId) resolved++;
+    }
+    if (resolved > 0) {
+      this.emit('update', this.state);
+    }
+  }
+
+  startYoutubeHydrationLoop() {
+    if (this.youtubeHydrationTimer) clearInterval(this.youtubeHydrationTimer);
+    this.youtubeHydrationTimer = setInterval(() => {
+      this.hydrateUpcomingYoutubeIds(5).catch((err) => {
+        console.error('[PREFETCH] Hydration loop error:', err);
+      });
+    }, 20000);
   }
 
   getNextValidIndex(fromIndex: number) {
@@ -187,21 +223,36 @@ class RadioState extends EventEmitter {
       this.isTransitioning = true;
       
       const previousIndex = this.currentIndex;
-      this.currentIndex = this.getNextValidIndex(this.currentIndex);
+      let candidateIndex = this.currentIndex;
+      let nextSong: any = null;
+      let selectedIndex = -1;
+      const maxAttempts = this.playlist.length;
 
-      const nextSong = this.playlist[this.currentIndex];
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        candidateIndex = this.getNextValidIndex(candidateIndex);
+        const candidate = this.playlist[candidateIndex];
+        if (!candidate || candidate.status === 'removed') continue;
+        if (!candidate.youtubeId) {
+          await this.resolveSongYoutubeId(candidate);
+        }
+        if (candidate.youtubeId) {
+          nextSong = candidate;
+          selectedIndex = candidateIndex;
+          break;
+        }
+      }
+
+      if (selectedIndex >= 0) {
+        this.currentIndex = selectedIndex;
+      } else {
+        this.currentIndex = this.getNextValidIndex(this.currentIndex);
+        nextSong = this.playlist[this.currentIndex];
+      }
+
       if (!nextSong) {
         console.error('[RADIO] No valid song found');
         this.isTransitioning = false;
         return;
-      }
-
-      // Resolve YouTube ID if needed
-      if (!nextSong.youtubeId) {
-        nextSong.youtubeId = await getYoutubeId(nextSong.title, nextSong.artist, nextSong.duration);
-        if (this.dbAvailable) {
-          await db.updateSong(nextSong.id, { youtubeId: nextSong.youtubeId });
-        }
       }
 
       this.songStartTime = Date.now();
@@ -226,6 +277,7 @@ class RadioState extends EventEmitter {
       this.emit('update', this.state);
       
       this.prefetchNextSong();
+      this.hydrateUpcomingYoutubeIds(6).catch(() => {});
       
       setTimeout(() => {
         this.isTransitioning = false;
@@ -319,6 +371,27 @@ class RadioState extends EventEmitter {
       
       if (!currentSong || currentSong.status === 'removed') {
         this.nextSong();
+        return;
+      }
+
+      if (!currentSong.youtubeId && !this.isResolvingCurrentSong) {
+        this.isResolvingCurrentSong = true;
+        this.resolveSongYoutubeId(currentSong)
+          .then((youtubeId) => {
+            if (!youtubeId) {
+              console.warn(`[RADIO] Skipping unresolved song: "${currentSong.title}"`);
+              this.nextSong(true);
+            } else {
+              this.emit('update', this.state);
+            }
+          })
+          .catch((err) => {
+            console.error('[RADIO] Failed resolving current song:', err);
+            this.nextSong(true);
+          })
+          .finally(() => {
+            this.isResolvingCurrentSong = false;
+          });
         return;
       }
       
