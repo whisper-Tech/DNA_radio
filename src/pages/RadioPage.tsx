@@ -415,6 +415,33 @@ const RadioPage: React.FC = () => {
     }
   };
 
+  const kickStartPlayback = useCallback(() => {
+    if (!playerRef.current || !audioUnlocked || !isPlaying) return;
+    try {
+      const internal: any = playerRef.current.getInternalPlayer?.();
+      if (internal?.playVideo) {
+        internal.playVideo();
+      }
+      if (internal?.setVolume) {
+        internal.setVolume(Math.round(volume * 100));
+      }
+    } catch (err) {
+      console.warn('[PLAYER] kickStartPlayback failed:', err);
+    }
+  }, [audioUnlocked, isPlaying, volume]);
+
+  useEffect(() => {
+    if (!audioUnlocked || !isPlaying || !currentSong?.youtubeId) return;
+    let tries = 0;
+    const maxTries = 8;
+    const timer = setInterval(() => {
+      tries += 1;
+      kickStartPlayback();
+      if (tries >= maxTries) clearInterval(timer);
+    }, 350);
+    return () => clearInterval(timer);
+  }, [audioUnlocked, isPlaying, currentSong?.youtubeId, kickStartPlayback]);
+
   if (!currentSong) {
     return (
       <div className="flex h-full items-center justify-center bg-black text-white font-mono">
@@ -787,6 +814,9 @@ const RadioPage: React.FC = () => {
                         onClick={() => {
                           setAudioUnlocked(true);
                           setPlayerError(null);
+                          setTimeout(() => {
+                            kickStartPlayback();
+                          }, 120);
                         }}
                         className="px-3 py-1 rounded-lg border border-cyan-500/30 text-[9px] font-mono tracking-widest text-cyan-300/80 hover:bg-cyan-500/10"
                       >
