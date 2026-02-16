@@ -63,6 +63,53 @@ const CameraRig = ({ isVortexing }: { isVortexing: boolean }) => {
   return null;
 };
 
+const PerfAutoScale = ({
+  fxEnabled,
+  onAutoDowngrade,
+  onFpsSample
+}: {
+  fxEnabled: boolean;
+  onAutoDowngrade: () => void;
+  onFpsSample: (fps: number) => void;
+}) => {
+  const frameCountRef = useRef(0);
+  const lastStampRef = useRef(performance.now());
+  const lowFpsHitsRef = useRef(0);
+  const cooldownRef = useRef(0);
+
+  useFrame(() => {
+    frameCountRef.current += 1;
+    const now = performance.now();
+    const elapsed = now - lastStampRef.current;
+    if (elapsed < 1000) return;
+
+    const fps = (frameCountRef.current * 1000) / elapsed;
+    onFpsSample(fps);
+    frameCountRef.current = 0;
+    lastStampRef.current = now;
+
+    if (!fxEnabled) return;
+    if (cooldownRef.current > 0) {
+      cooldownRef.current -= 1;
+      return;
+    }
+
+    if (fps < 22) {
+      lowFpsHitsRef.current += 1;
+    } else if (fps > 30) {
+      lowFpsHitsRef.current = Math.max(0, lowFpsHitsRef.current - 1);
+    }
+
+    if (lowFpsHitsRef.current >= 3) {
+      onAutoDowngrade();
+      lowFpsHitsRef.current = 0;
+      cooldownRef.current = 5;
+    }
+  });
+
+  return null;
+};
+
 const RadioPage: React.FC = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [playlist, setPlaylist] = useState<Song[]>([]);
@@ -93,6 +140,22 @@ const RadioPage: React.FC = () => {
   const [socketError, setSocketError] = useState<string | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [fxEnabled, setFxEnabled] = useState(false);
+  const [autoFxDowngraded, setAutoFxDowngraded] = useState(false);
+  const [fpsEstimate, setFpsEstimate] = useState(60);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('dna_radio_fx');
+      if (saved === 'high') setFxEnabled(true);
+      if (saved === 'low') setFxEnabled(false);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('dna_radio_fx', fxEnabled ? 'high' : 'low');
+    } catch {}
+  }, [fxEnabled]);
 
   // Get upcoming songs for queue
   const upcomingSongs = playlist.slice(currentIndex + 1, currentIndex + 6);
@@ -166,9 +229,8 @@ const RadioPage: React.FC = () => {
 
   useEffect(() => {
     const newSocket = io('/', {
-      // Polling-only to avoid noisy WS-open/close warnings on some local setups.
-      transports: ['polling'],
-      upgrade: false,
+      transports: ['websocket', 'polling'],
+      upgrade: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       timeout: 8000,
@@ -369,16 +431,17 @@ const RadioPage: React.FC = () => {
 
   // Update current time display
   useEffect(() => {
+    const intervalMs = fxEnabled ? 120 : 250;
     const interval = setInterval(() => {
       if (isPlaying && isConnected) {
         const correctedServerTime = Date.now() + serverTimeOffset;
         const elapsed = correctedServerTime - serverSongStartTime;
         setCurrentTime(Math.max(0, elapsed));
       }
-    }, 100); // Update every 100ms for smooth progress bar
+    }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [isPlaying, serverSongStartTime, isConnected]);
+  }, [isPlaying, serverSongStartTime, isConnected, fxEnabled]);
 
   const currentSong = playlist[currentIndex];
 
@@ -421,6 +484,9 @@ const RadioPage: React.FC = () => {
       const internal: any = playerRef.current.getInternalPlayer?.();
       if (internal?.playVideo) {
         internal.playVideo();
+      }
+      if (internal?.unMute) {
+        internal.unMute();
       }
       if (internal?.setVolume) {
         internal.setVolume(Math.round(volume * 100));
@@ -465,6 +531,9 @@ const RadioPage: React.FC = () => {
         if (!audioUnlocked) {
           setAudioUnlocked(true);
           setPlayerError(null);
+          setTimeout(() => {
+            kickStartPlayback();
+          }, 120);
         }
       }}
     >
@@ -493,12 +562,13 @@ const RadioPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Hidden Audio Player with improved sync */}
-      {/* Use offscreen/0-size instead of display:none; some embeds won't play when hidden. */}
-      <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
+      {/* Keep a real-sized offscreen iframe; some browsers throttle tiny hidden embeds aggressively. */}
+      <div style={{ position: 'absolute', left: -10000, top: 0, width: 320, height: 180, overflow: 'hidden', opacity: 0.01, pointerEvents: 'none' }}>
         {currentSong.youtubeId && (
           <ReactPlayerAny
             ref={playerRef}
             playing={isPlaying && audioUnlocked}
+            muted={false}
             volume={volume}
             onReady={handlePlayerReady}
             onError={(e: any) => {
@@ -520,8 +590,10 @@ const RadioPage: React.FC = () => {
             config={{
               youtube: {
                 playerVars: {
+                  autoplay: 1,
                   disablekb: 1,
                   modestbranding: 1,
+                  playsinline: 1,
                   rel: 0,
                 }
               }
@@ -533,8 +605,9 @@ const RadioPage: React.FC = () => {
 
       {/* 3D Canvas with Cyberpunk Post-Processing */}
       <Canvas 
+        dpr={fxEnabled ? [1, 1.25] : [0.75, 1]}
         camera={{ position: [0, 50, 50], fov: 45 }}
-        gl={{ antialias: true, alpha: false }}
+        gl={{ antialias: fxEnabled, alpha: false, powerPreference: 'high-performance' as any }}
       >
         <color attach="background" args={['#000000']} />
         <fog attach="fog" args={['#000000', 15, 50]} />
@@ -558,11 +631,11 @@ const RadioPage: React.FC = () => {
           <Stars 
             radius={100} 
             depth={50} 
-            count={fxEnabled ? 4000 : 1400}
+            count={fxEnabled ? 2200 : 850}
             factor={fxEnabled ? 3 : 2}
             saturation={0.5} 
             fade 
-            speed={fxEnabled ? 1.2 : 0.5}
+            speed={fxEnabled ? 0.9 : 0.35}
           />
           
           {/* Cyberpunk Post-Processing Stack */}
@@ -571,22 +644,22 @@ const RadioPage: React.FC = () => {
               <Bloom 
                 luminanceThreshold={0.1} 
                 mipmapBlur 
-                intensity={1.2} 
-                radius={0.35}
+                intensity={0.75}
+                radius={0.2}
               />
               <ChromaticAberration
                 blendFunction={BlendFunction.NORMAL}
-                offset={new THREE.Vector2(0.0012, 0.0012)}
+                offset={new THREE.Vector2(0.0007, 0.0007)}
                 radialModulation={false}
                 modulationOffset={0.5}
               />
               <Scanline
                 blendFunction={BlendFunction.OVERLAY}
                 density={1.1}
-                opacity={0.04}
+                opacity={0.025}
               />
               <Noise 
-                opacity={0.04}
+                opacity={0.02}
                 blendFunction={BlendFunction.SOFT_LIGHT}
               />
               <Vignette
@@ -597,7 +670,7 @@ const RadioPage: React.FC = () => {
                 <Glitch
                   delay={new THREE.Vector2(0, 0)}
                   duration={new THREE.Vector2(0.1, 0.25)}
-                  strength={new THREE.Vector2(0.08 * glitchIntensity, 0.14 * glitchIntensity)}
+                  strength={new THREE.Vector2(0.04 * glitchIntensity, 0.08 * glitchIntensity)}
                   mode={GlitchMode.SPORADIC}
                   active={true}
                   ratio={0.85}
@@ -605,6 +678,14 @@ const RadioPage: React.FC = () => {
               ) : null}
             </EffectComposerAny>
           ) : null}
+          <PerfAutoScale
+            fxEnabled={fxEnabled}
+            onAutoDowngrade={() => {
+              setFxEnabled(false);
+              setAutoFxDowngraded(true);
+            }}
+            onFpsSample={setFpsEstimate}
+          />
         </Suspense>
         
         <OrbitControls 
@@ -674,6 +755,11 @@ const RadioPage: React.FC = () => {
               {!audioUnlocked && (
                 <div className="text-[10px] font-mono tracking-widest text-yellow-400/70">
                   AUDIO_LOCKED_CLICK_ENABLE_AUDIO
+                </div>
+              )}
+              {autoFxDowngraded && (
+                <div className="text-[10px] font-mono tracking-widest text-orange-400/70">
+                  PERF_GUARD:FX_LOW_FORCED
                 </div>
               )}
               {isConnected && (
@@ -809,6 +895,9 @@ const RadioPage: React.FC = () => {
                     >
                       {fxEnabled ? 'FX_HIGH' : 'FX_LOW'}
                     </button>
+                    <div className="text-[9px] font-mono tracking-widest text-white/40">
+                      FPS:{Math.round(fpsEstimate)}
+                    </div>
                     {!audioUnlocked && (
                       <button
                         onClick={() => {
