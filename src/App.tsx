@@ -1,6 +1,8 @@
 import { Route, Switch, useLocation } from "wouter";
 import { StarEntry } from "./components/StarEntry";
 import RadioPage from "./pages/RadioPage";
+import RadioPage3D from "./pages/RadioPage3D";
+import AdminDashboard from "./pages/AdminDashboard";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { useKonamiCode } from "./hooks/useKonamiCode";
 
@@ -23,14 +25,14 @@ function AppContent() {
   });
 
   const handleAccessGranted = () => {
-    navigate('/dashboard');
+    navigate('/radio');
   };
 
   return (
     <div className="w-full h-full bg-black">
       <Switch>
         <Route path="/">
-          <StarEntry onAccessGranted={handleAccessGranted} />
+          <RadioPage />
         </Route>
         
         <Route path="/dashboard">
@@ -41,12 +43,16 @@ function AppContent() {
           <RadioPage />
         </Route>
 
+        <Route path="/radio-3d">
+          <RadioPage3D />
+        </Route>
+
+        <Route path="/admin">
+          <AdminDashboard />
+        </Route>
+
         <Route>
-          <div className="flex h-screen w-screen items-center justify-center bg-black text-white">
-            <h1 className="text-2xl font-mono tracking-widest text-red-500">
-              404 // DISCONNECTED
-            </h1>
-          </div>
+          <RadioPage />
         </Route>
       </Switch>
     </div>

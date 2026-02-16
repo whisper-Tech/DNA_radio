@@ -31,7 +31,9 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use(vite.middlewares);
 
-  app.use("/{*path}", async (req, res, next) => {
+  // Express route patterns like `/{*path}` do not reliably match `/` across versions.
+  // Use a catch-all so the SPA loads at the root path too.
+  app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
     try {

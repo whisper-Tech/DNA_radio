@@ -21,20 +21,46 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(import.meta.dirname, "client", "src"),
+      "@": path.resolve(import.meta.dirname, "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },
   },
-  root: path.resolve(import.meta.dirname, "client"),
+  optimizeDeps: {
+    exclude: [
+      'vimeo-video-element/react',
+      'twitch-video-element/react',
+      'tiktok-video-element/react',
+      'wistia-video-element/react',
+      'soundcloud-video-element/react',
+      'streamable-video-element/react',
+      'vidyard-video-element/react',
+      'kaltura-video-element/react',
+      'react-player'
+    ]
+  },
+  root: path.resolve(import.meta.dirname),
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
   },
   server: {
+    hmr: {
+      overlay: false
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],
+    },
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://127.0.0.1:3001',
+        ws: true,
+      },
     },
   },
 });

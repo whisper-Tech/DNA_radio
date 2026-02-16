@@ -6,7 +6,7 @@ import { randomUUID } from "crypto";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByDeviceFingerprint(deviceFingerprint: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
 }
 
@@ -21,15 +21,20 @@ export class MemStorage implements IStorage {
     return this.users.get(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getUserByDeviceFingerprint(deviceFingerprint: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find((user) => user.deviceFingerprint === deviceFingerprint);
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    // This is a lightweight in-memory storage used by template code.
+    // The real app uses DB-backed users; keep this type-correct for `tsc`.
+    const user: User = {
+      id,
+      deviceFingerprint: insertUser.deviceFingerprint,
+      createdAt: new Date(),
+      lastSeenAt: new Date(),
+    };
     this.users.set(id, user);
     return user;
   }

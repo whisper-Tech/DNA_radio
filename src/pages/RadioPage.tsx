@@ -11,13 +11,31 @@ import {
   Glitch
 } from '@react-three/postprocessing';
 import { BlendFunction, GlitchMode } from 'postprocessing';
-import { DNAHelix } from '@/components/DNAHelix';
-import { Song } from '@/components/DNAHelix/types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, XCircle, Play, Pause, Radio, Wifi, WifiOff, SkipForward } from 'lucide-react';
+import { Heart, XCircle, Play, Pause, Radio, Wifi, WifiOff, SkipForward, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import ReactPlayer from 'react-player';
 import * as THREE from 'three';
+import { DNAHelix } from '../components/DNAHelix';
+
+// `react-player` types can conflict with duplicate React type packages in this workspace.
+// Treat it as `any` to keep `tsc` green without affecting runtime behavior.
+const ReactPlayerAny: any = ReactPlayer;
+const EffectComposerAny: any = EffectComposer;
+
+// Define Song interface locally
+interface Song {
+  id: string;
+  title: string;
+  artist: string;
+  youtubeId: string;
+  duration: number;
+  health: number;
+  status?: string;
+  totalPlays?: number;
+  totalAccepts?: number;
+  totalRejects?: number;
+}
 
 const formatTime = (ms: number) => {
   const seconds = Math.floor((ms / 1000) % 60);
@@ -53,20 +71,41 @@ const RadioPage: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [songStartTime, setSongStartTime] = useState<number>(Date.now());
   const [serverSongStartTime, setServerSongStartTime] = useState<number>(Date.now());
-  const playerRef = useRef<ReactPlayer>(null);
+  const playerRef = useRef<any>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncDrift, setLastSyncDrift] = useState(0);
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPlayToggleTime = useRef<number>(0);
+  const PLAY_COOLDOWN_MS = 500;
   const [crossFadeOpacity, setCrossFadeOpacity] = useState(1);
   const [glitchIntensity, setGlitchIntensity] = useState(0);
   const [playerReady, setPlayerReady] = useState(false);
-  const [volume, setVolume] = useState(0.75);
+  const [volume, setVolume] = useState(0.25);
   const [pendingSuggestions, setPendingSuggestions] = useState<any>(null);
   const [suggestionCountdown, setSuggestionCountdown] = useState(10);
   const [transitionDuration, setTransitionDuration] = useState(0.3);
   const [isVortexing, setIsVortexing] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [playerError, setPlayerError] = useState<string | null>(null);
+  const [socketError, setSocketError] = useState<string | null>(null);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [useFallbackStream, setUseFallbackStream] = useState(false);
+  const [fxEnabled, setFxEnabled] = useState(false);
+  const playerErrorCountRef = useRef(0);
+  const fallbackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const FALLBACK_STREAM_URL = 'https://stream.nightride.fm/nightride.mp3';
+
+  // Get upcoming songs for queue
+  const upcomingSongs = playlist.slice(currentIndex + 1, currentIndex + 6);
+  
+  // Filter songs based on search
+  const filteredSongs = playlist.filter(song => 
+    song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    song.artist.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Precise time sync with server
   const syncWithServer = useCallback(() => {
@@ -102,7 +141,7 @@ const RadioPage: React.FC = () => {
       console.log('[DROP] Detected YouTube ID:', videoId);
       
       try {
-        const response = await fetch('http://localhost:3001/api/add-song', {
+        const response = await fetch('/api/add-song', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -130,17 +169,20 @@ const RadioPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:3001', {
-      transports: ['websocket'],
+    const newSocket = io('/', {
+      // Polling-only to avoid noisy WS-open/close warnings on some local setups.
+      transports: ['polling'],
       upgrade: false,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      timeout: 8000,
     });
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
       console.log('[SYNC] Connected to DNA Radio Server');
       setIsConnected(true);
+      setSocketError(null);
       
       // Initial time sync
       const clientSendTime = Date.now();
@@ -178,7 +220,18 @@ const RadioPage: React.FC = () => {
         }, 300);
       }
       
-      setIsPlaying(state.isPlaying);
+      // Stabilized playback state update to prevent rapid toggling
+      const now = Date.now();
+      if (state.isPlaying !== isPlaying && (now - lastPlayToggleTime.current) > PLAY_COOLDOWN_MS) {
+        lastPlayToggleTime.current = now;
+        setIsPlaying(state.isPlaying);
+      } else if (state.isPlaying !== isPlaying) {
+        // Queue a retry if we are in cooldown
+        setTimeout(() => {
+          setIsPlaying(state.isPlaying);
+        }, PLAY_COOLDOWN_MS);
+      }
+
       setServerSongStartTime(state.songStartTime);
       setSongStartTime(state.songStartTime);
     });
@@ -203,14 +256,45 @@ const RadioPage: React.FC = () => {
     });
 
     newSocket.on('connect_error', (error) => {
-      console.error('[SYNC] Connection error:', error);
+      // Expected briefly during startup/reload; keep logs quieter.
+      console.warn('[SYNC] Connection retry:', (error as any)?.message || 'connect_error');
       setIsConnected(false);
+      setSocketError((error as any)?.message || 'connect_error');
     });
 
     return () => { 
       newSocket.close(); 
     };
   }, []);
+
+  // HTTP fallback: load state even if Socket.IO can't connect.
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      if (cancelled) return;
+      if (isConnected) return;
+      try {
+        const r = await fetch('/api/sync');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const state = await r.json();
+        setPlaylist(state.playlist || []);
+        setCurrentIndex(state.currentIndex || 0);
+        setIsPlaying(!!state.isPlaying);
+        setServerSongStartTime(state.songStartTime || Date.now());
+        setSongStartTime(state.songStartTime || Date.now());
+        setPendingSuggestions(state.pendingSuggestions || null);
+        console.log('[SYNC] Loaded state via HTTP fallback');
+      } catch (err: any) {
+        console.error('[SYNC] HTTP fallback failed:', err);
+        setSocketError((prev) => prev || err?.message || 'http_fallback_failed');
+      }
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [isConnected]);
 
   // Periodic time sync every 10 seconds
   useEffect(() => {
@@ -319,6 +403,40 @@ const RadioPage: React.FC = () => {
     setPendingSuggestions(null);
   };
 
+  const handleSkip = () => {
+    if (!socket) return;
+    socket.emit('skip');
+    setGlitchIntensity(0.3);
+    setTimeout(() => setGlitchIntensity(0), 200);
+  };
+
+  const handlePlayPause = () => {
+    // User gesture unlocks media playback policies in modern browsers.
+    setAudioUnlocked(true);
+    setPlayerError(null);
+    if (!socket) return;
+    socket.emit('toggle_playback');
+    setGlitchIntensity(0.2);
+    setTimeout(() => setGlitchIntensity(0), 150);
+  };
+
+  useEffect(() => {
+    if (!fallbackAudioRef.current) return;
+    fallbackAudioRef.current.volume = volume;
+  }, [volume]);
+
+  useEffect(() => {
+    if (!fallbackAudioRef.current) return;
+    if (!audioUnlocked) return;
+    if (isPlaying) {
+      fallbackAudioRef.current.play().catch((err) => {
+        console.warn('[FALLBACK_AUDIO] play failed:', err);
+      });
+    } else {
+      fallbackAudioRef.current.pause();
+    }
+  }, [isPlaying, audioUnlocked, useFallbackStream]);
+
   // Handle player ready
   const handlePlayerReady = () => {
     setPlayerReady(true);
@@ -352,6 +470,12 @@ const RadioPage: React.FC = () => {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onPointerDown={() => {
+        if (!audioUnlocked) {
+          setAudioUnlocked(true);
+          setPlayerError(null);
+        }
+      }}
     >
       {/* Drag Over Overlay */}
       <AnimatePresence>
@@ -378,17 +502,30 @@ const RadioPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Hidden Audio Player with improved sync */}
-      <div className="hidden">
-        {currentSong.youtubeId && (
-          <ReactPlayer
+      {/* Use offscreen/0-size instead of display:none; some embeds won't play when hidden. */}
+      <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
+        {!useFallbackStream && currentSong.youtubeId && (
+          <ReactPlayerAny
             ref={playerRef}
-            url={`https://www.youtube.com/watch?v=${currentSong.youtubeId}`}
-            playing={isPlaying}
+            playing={isPlaying && audioUnlocked}
             volume={volume}
             onReady={handlePlayerReady}
-            onBuffer={() => {/* setIsSyncing(true); */}}
-            onBufferEnd={() => {/* setIsSyncing(false); */}}
-            onProgress={({ playedSeconds }) => {
+            onError={(e: any) => {
+              console.error('[PLAYER] Error:', e);
+              const msg = (e && (e.name || e.message)) ? String(e.name || e.message) : 'player_error';
+              if (msg.toLowerCase().includes('notallowed')) {
+                setPlayerError('autoplay_blocked_click_play');
+              } else {
+                setPlayerError(msg);
+              }
+              playerErrorCountRef.current += 1;
+              if (playerErrorCountRef.current >= 3) {
+                console.warn('[PLAYER] Switching to fallback stream after repeated failures');
+                setUseFallbackStream(true);
+              }
+            }}
+            onProgress={(e: any) => {
+              const { playedSeconds } = e;
               // Only update if not syncing to avoid jumps
               if (!isSyncing) {
                 setCurrentTime(playedSeconds * 1000);
@@ -402,7 +539,18 @@ const RadioPage: React.FC = () => {
                   rel: 0,
                 }
               }
-            }}
+            } as any}
+            url={`https://www.youtube.com/watch?v=${currentSong.youtubeId}`}
+          />
+        )}
+        {useFallbackStream && (
+          <audio
+            ref={fallbackAudioRef}
+            src={FALLBACK_STREAM_URL}
+            autoPlay={isPlaying && audioUnlocked}
+            controls={false}
+            loop={false}
+            preload="none"
           />
         )}
       </div>
@@ -424,71 +572,73 @@ const RadioPage: React.FC = () => {
           <directionalLight position={[-10, -10, -5]} intensity={0.3} color="#a855f7" />
           <pointLight position={[0, 0, 0]} intensity={1} color="#22d3ee" distance={20} />
           
-          <DNAHelix playlist={playlist} currentIndex={currentIndex} />
+          <DNAHelix 
+            playlist={playlist} 
+            currentIndex={currentIndex} 
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+          />
           
           <Stars 
             radius={100} 
             depth={50} 
-            count={7000} 
-            factor={4} 
+            count={fxEnabled ? 4000 : 1400}
+            factor={fxEnabled ? 3 : 2}
             saturation={0.5} 
             fade 
-            speed={1.5} 
+            speed={fxEnabled ? 1.2 : 0.5}
           />
           
           {/* Cyberpunk Post-Processing Stack */}
-          <EffectComposer disableNormalPass>
-            {/* Primary bloom for glow effects */}
-            <Bloom 
-              luminanceThreshold={0.1} 
-              mipmapBlur 
-              intensity={1.5} 
-              radius={0.4}
-            />
-            
-            <ChromaticAberration
-              blendFunction={BlendFunction.NORMAL}
-              offset={new THREE.Vector2(0.0015, 0.0015)}
-            />
-            
-            <Scanline
-              blendFunction={BlendFunction.OVERLAY}
-              density={1.2}
-              opacity={0.05}
-            />
-            
-            <Noise 
-              opacity={0.05}
-              blendFunction={BlendFunction.SOFT_LIGHT}
-            />
-            
-            <Vignette
-              offset={0.5}
-              darkness={0.5}
-            />
-            
-            {/* Dynamic glitch effect triggered by events */}
-            {glitchIntensity > 0 && (
-              <Glitch
-                delay={new THREE.Vector2(0, 0)}
-                duration={new THREE.Vector2(0.1, 0.3)}
-                strength={new THREE.Vector2(0.1 * glitchIntensity, 0.2 * glitchIntensity)}
-                mode={GlitchMode.SPORADIC}
-                active={true}
-                ratio={0.85}
+          {fxEnabled ? (
+            <EffectComposerAny disableNormalPass>
+              <Bloom 
+                luminanceThreshold={0.1} 
+                mipmapBlur 
+                intensity={1.2} 
+                radius={0.35}
               />
-            )}
-          </EffectComposer>
+              <ChromaticAberration
+                blendFunction={BlendFunction.NORMAL}
+                offset={new THREE.Vector2(0.0012, 0.0012)}
+                radialModulation={false}
+                modulationOffset={0.5}
+              />
+              <Scanline
+                blendFunction={BlendFunction.OVERLAY}
+                density={1.1}
+                opacity={0.04}
+              />
+              <Noise 
+                opacity={0.04}
+                blendFunction={BlendFunction.SOFT_LIGHT}
+              />
+              <Vignette
+                offset={0.5}
+                darkness={0.5}
+              />
+              {glitchIntensity > 0 ? (
+                <Glitch
+                  delay={new THREE.Vector2(0, 0)}
+                  duration={new THREE.Vector2(0.1, 0.25)}
+                  strength={new THREE.Vector2(0.08 * glitchIntensity, 0.14 * glitchIntensity)}
+                  mode={GlitchMode.SPORADIC}
+                  active={true}
+                  ratio={0.85}
+                />
+              ) : null}
+            </EffectComposerAny>
+          ) : null}
         </Suspense>
         
         <OrbitControls 
           enablePan={false} 
-          autoRotate 
-          autoRotateSpeed={0.3}
+          autoRotate={fxEnabled}
+          autoRotateSpeed={0.2}
           minDistance={10}
           maxDistance={30}
-          enableDamping
-          dampingFactor={0.05}
+          enableDamping={false}
+          dampingFactor={0.03}
         />
       </Canvas>
 
@@ -540,6 +690,21 @@ const RadioPage: React.FC = () => {
               <p className={`text-lg font-mono font-bold tracking-tighter ${isConnected ? 'text-white' : 'text-red-500'}`}>
                 {isConnected ? 'LIVE_BROADCAST' : 'LINK_ERROR'}
               </p>
+              {(socketError || playerError) && (
+                <div className="text-[10px] font-mono tracking-widest text-red-400/70">
+                  {socketError ? `NET:${socketError}` : `AUDIO:${playerError}`}
+                </div>
+              )}
+              {useFallbackStream && (
+                <div className="text-[10px] font-mono tracking-widest text-cyan-400/70">
+                  AUDIO_MODE:FALLBACK_STREAM
+                </div>
+              )}
+              {!audioUnlocked && (
+                <div className="text-[10px] font-mono tracking-widest text-yellow-400/70">
+                  AUDIO_LOCKED_CLICK_PLAY
+                </div>
+              )}
               {isConnected && (
                 <div className="flex flex-col gap-0.5 opacity-40">
                   <div className="text-[10px] font-mono text-cyan-400">DRIFT: {lastSyncDrift.toFixed(0)}MS</div>
@@ -626,20 +791,37 @@ const RadioPage: React.FC = () => {
                     </span>
                   </motion.button>
 
-                  <motion.button 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="relative group"
-                  >
-                    <div className="absolute inset-0 bg-cyan-400 blur-xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-                    <div className="relative p-10 rounded-full bg-white text-black transition-transform duration-500">
-                      {isPlaying ? (
-                        <Pause className="w-10 h-10 fill-black" />
-                      ) : (
-                        <Play className="w-10 h-10 fill-black ml-1" />
-                      )}
-                    </div>
-                  </motion.button>
+                  <div className="flex items-center gap-4">
+                    <motion.button
+                      onClick={handleSkip}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="group flex flex-col items-center gap-3"
+                    >
+                      <div className="p-4 rounded-full bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 transition-all">
+                        <SkipForward className="w-6 h-6 text-white/70 group-hover:text-white rotate-90" />
+                      </div>
+                      <span className="text-[8px] text-white/30 font-mono uppercase tracking-wider group-hover:text-white/50 transition-colors">
+                        SKIP
+                      </span>
+                    </motion.button>
+
+                    <motion.button 
+                      onClick={handlePlayPause}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="relative group"
+                    >
+                      <div className="absolute inset-0 bg-cyan-400 blur-xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                      <div className="relative p-10 rounded-full bg-white text-black transition-transform duration-500">
+                        {isPlaying ? (
+                          <Pause className="w-10 h-10 fill-black" />
+                        ) : (
+                          <Play className="w-10 h-10 fill-black ml-1" />
+                        )}
+                      </div>
+                    </motion.button>
+                  </div>
 
                   <motion.button 
                     onClick={() => handleVote('accept')} 
@@ -656,8 +838,47 @@ const RadioPage: React.FC = () => {
                   </motion.button>
                 </div>
 
+                {/* Volume */}
+                <div className="flex items-center justify-center gap-4 mb-8">
+                  <div className="font-mono text-[9px] text-white/30 tracking-[0.3em] uppercase">
+                    VOL
+                  </div>
+                  <input
+                    aria-label="Volume"
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={Math.round(volume * 100)}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(100, Number(e.target.value)));
+                      setVolume(v / 100);
+                    }}
+                    className="w-56 accent-cyan-400"
+                  />
+                  <div className="font-mono text-[10px] text-cyan-400/70 tabular-nums w-12 text-right">
+                    {Math.round(volume * 100)}%
+                  </div>
+                </div>
+
                 {/* Progress & Meta */}
                 <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => setFxEnabled((v) => !v)}
+                      className="px-3 py-1 rounded-lg border border-white/20 text-[9px] font-mono tracking-widest text-white/70 hover:bg-white/10"
+                    >
+                      {fxEnabled ? 'FX_HIGH' : 'FX_LOW'}
+                    </button>
+                    {!useFallbackStream && (
+                      <button
+                        onClick={() => setUseFallbackStream(true)}
+                        className="px-3 py-1 rounded-lg border border-cyan-500/30 text-[9px] font-mono tracking-widest text-cyan-300/80 hover:bg-cyan-500/10"
+                      >
+                        FORCE_STREAM
+                      </button>
+                    )}
+                  </div>
                   <div className="flex justify-between items-end">
                     <div className="font-mono text-[10px] text-cyan-400/60 tracking-widest uppercase">
                       Stream_Position: {formatTime(currentTime)}
@@ -692,6 +913,123 @@ const RadioPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Queue Panel */}
+      <AnimatePresence>
+        {showQueue && (
+          <motion.div
+            initial={{ opacity: 0, x: 300 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 300 }}
+            className="absolute top-24 right-8 w-80 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-2xl p-6 pointer-events-auto"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-cyan-400">UPCOMING</h3>
+              <button
+                onClick={() => setShowQueue(false)}
+                className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <XCircle className="w-4 h-4 text-white/50" />
+              </button>
+            </div>
+            
+            {/* Search */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                <input
+                  type="text"
+                  placeholder="Search playlist..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-sm text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/50"
+                />
+              </div>
+            </div>
+
+            {/* Queue List */}
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {searchQuery ? (
+                // Search results
+                filteredSongs.slice(0, 10).map((song, i) => (
+                  <div
+                    key={song.id}
+                    className="flex items-center gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+                  >
+                    <div className="text-xs text-white/30 font-mono w-6">{i + 1}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{song.title}</div>
+                      <div className="text-xs text-white/50 truncate">{song.artist}</div>
+                    </div>
+                    <div className={`font-mono text-xs ${
+                      song.health >= 5 ? 'text-green-400' :
+                      song.health <= -5 ? 'text-red-400' :
+                      'text-white/50'
+                    }`}>
+                      {song.health >= 0 ? '+' : ''}{song.health}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                // Upcoming queue
+                upcomingSongs.map((song, i) => (
+                  <motion.div
+                    key={song.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5"
+                  >
+                    <div className="text-xs text-cyan-400 font-mono w-6">{i + 1}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{song.title}</div>
+                      <div className="text-xs text-white/50 truncate">{song.artist}</div>
+                    </div>
+                    <div className={`font-mono text-xs ${
+                      song.health >= 5 ? 'text-green-400' :
+                      song.health <= -5 ? 'text-red-400' :
+                      'text-white/50'
+                    }`}>
+                      {song.health >= 0 ? '+' : ''}{song.health}
+                    </div>
+                  </motion.div>
+                ))
+              )}
+              
+              {searchQuery && filteredSongs.length === 0 && (
+                <div className="text-center py-8 text-white/30 text-sm">
+                  No songs found
+                </div>
+              )}
+              
+              {!searchQuery && upcomingSongs.length === 0 && (
+                <div className="text-center py-8 text-white/30 text-sm">
+                  Queue is empty
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="flex justify-between text-xs text-white/30 font-mono">
+                <span>TOTAL: {playlist.length}</span>
+                <span>ACTIVE: {playlist.filter(s => s.status === 'active').length}</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Queue Toggle Button */}
+      <button
+        onClick={() => setShowQueue(!showQueue)}
+        className="absolute top-8 right-8 p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all pointer-events-auto group"
+      >
+        {showQueue ? (
+          <ChevronDown className="w-5 h-5 text-white/50 group-hover:text-white" />
+        ) : (
+          <ChevronUp className="w-5 h-5 text-white/50 group-hover:text-white" />
+        )}
+      </button>
 
       {/* Sync indicator overlay */}
       <AnimatePresence>
