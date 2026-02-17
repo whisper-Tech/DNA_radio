@@ -26,19 +26,7 @@ export default defineConfig({
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },
   },
-  optimizeDeps: {
-    exclude: [
-      'vimeo-video-element/react',
-      'twitch-video-element/react',
-      'tiktok-video-element/react',
-      'wistia-video-element/react',
-      'soundcloud-video-element/react',
-      'streamable-video-element/react',
-      'vidyard-video-element/react',
-      'kaltura-video-element/react',
-      'react-player'
-    ]
-  },
+
   root: path.resolve(import.meta.dirname),
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),

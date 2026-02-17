@@ -14,11 +14,10 @@ import { BlendFunction, GlitchMode } from 'postprocessing';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, XCircle, Radio, Wifi, WifiOff, SkipForward, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
-import ReactPlayer from 'react-player';
 import * as THREE from 'three';
 import { DNAHelix } from '../components/DNAHelix';
+import YouTubePlayer, { type YouTubePlayerHandle } from '../components/YouTubePlayer';
 
-const ReactPlayerAny: any = ReactPlayer;
 const EffectComposerAny: any = EffectComposer;
 
 // Define Song interface locally
@@ -116,7 +115,7 @@ const RadioPage: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [songStartTime, setSongStartTime] = useState<number>(Date.now());
   const [serverSongStartTime, setServerSongStartTime] = useState<number>(Date.now());
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YouTubePlayerHandle>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncDrift, setLastSyncDrift] = useState(0);
@@ -465,43 +464,11 @@ const RadioPage: React.FC = () => {
   };
 
   function getPlayerCurrentSeconds() {
-    const player: any = playerRef.current;
-    if (!player) return 0;
-    if (typeof player.getCurrentTime === 'function') {
-      return player.getCurrentTime() || 0;
-    }
-    if (typeof player.currentTime === 'number') {
-      return player.currentTime || 0;
-    }
-    const internal = player.getInternalPlayer?.();
-    if (typeof internal?.getCurrentTime === 'function') {
-      return internal.getCurrentTime() || 0;
-    }
-    if (typeof internal?.currentTime === 'number') {
-      return internal.currentTime || 0;
-    }
-    return 0;
+    return playerRef.current?.getCurrentTime() || 0;
   }
 
   function seekPlayerToSeconds(targetSeconds: number) {
-    const player: any = playerRef.current;
-    if (!player) return;
-    if (typeof player.seekTo === 'function') {
-      player.seekTo(targetSeconds, 'seconds');
-      return;
-    }
-    if ('currentTime' in player) {
-      player.currentTime = targetSeconds;
-      return;
-    }
-    const internal = player.getInternalPlayer?.();
-    if (typeof internal?.seekTo === 'function') {
-      internal.seekTo(targetSeconds, 'seconds');
-      return;
-    }
-    if (internal && 'currentTime' in internal) {
-      internal.currentTime = targetSeconds;
-    }
+    playerRef.current?.seekTo(targetSeconds);
   }
 
   // Handle player ready
@@ -521,20 +488,9 @@ const RadioPage: React.FC = () => {
   const kickStartPlayback = useCallback(() => {
     if (!playerRef.current || !audioUnlocked || !isPlaying) return;
     try {
-      const player: any = playerRef.current;
-      if (typeof player.play === 'function') {
-        Promise.resolve(player.play()).catch(() => {});
-      }
-      const internal: any = player.getInternalPlayer?.();
-      if (internal?.playVideo) {
-        internal.playVideo();
-      }
-      if (internal?.unMute) {
-        internal.unMute();
-      }
-      if (internal?.setVolume) {
-        internal.setVolume(Math.round(volume * 100));
-      }
+      playerRef.current.play();
+      playerRef.current.unMute();
+      playerRef.current.setVolume(volume);
     } catch (err) {
       console.warn('[PLAYER] kickStartPlayback failed:', err);
     }
@@ -542,18 +498,15 @@ const RadioPage: React.FC = () => {
 
   useEffect(() => {
     if (!playerRef.current) return;
-    playerRef.current.volume = Math.max(0, Math.min(1, volume));
+    playerRef.current.setVolume(volume);
   }, [volume]);
 
   useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
+    if (!playerRef.current) return;
     if (isPlaying && audioUnlocked) {
-      player.play().catch((err: any) => {
-        console.warn('[PLAYER] play() failed:', err?.message || err);
-      });
+      playerRef.current.play();
     } else {
-      player.pause();
+      playerRef.current.pause();
     }
   }, [isPlaying, audioUnlocked, currentSong?.youtubeId]);
 
@@ -644,61 +597,45 @@ const RadioPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Hidden Audio Player */}
-      <div style={{ position: 'absolute', left: -10000, top: 0, width: 320, height: 180, overflow: 'hidden', opacity: 0.01, pointerEvents: 'none' }}>
-        {currentSong.youtubeId && (
-          <ReactPlayerAny
-            ref={playerRef}
-            playing={isPlaying && audioUnlocked}
-            muted={false}
-            volume={volume}
-            onReady={handlePlayerReady}
-            onPlaying={() => {
-              lastPlayingAtRef.current = Date.now();
-              setPlayerError(null);
-              console.log('[PLAYER] onPlaying');
-            }}
-            onError={(e: any) => {
-              const mediaError = e?.currentTarget?.error;
-              const detail = {
-                name: e?.name,
-                eventMessage: e?.message,
-                code: mediaError?.code,
-                mediaMessage: mediaError?.message,
-                data: e?.data,
-              };
-              console.error('[PLAYER] Error:', detail);
-              const msg = (e && (e.name || e.message || e.data)) ? String(e.name || e.message || e.data) : `player_error_${mediaError?.code || 'unknown'}`;
-              const lower = msg.toLowerCase();
-              if (lower.includes('notallowed')) {
-                setPlayerError('autoplay_blocked_click_play');
-              } else {
-                setPlayerError(msg);
-              }
+      {currentSong.youtubeId && (
+        <YouTubePlayer
+          ref={playerRef}
+          videoId={currentSong.youtubeId}
+          playing={isPlaying && audioUnlocked}
+          volume={volume}
+          onReady={handlePlayerReady}
+          onPlaying={() => {
+            lastPlayingAtRef.current = Date.now();
+            setPlayerError(null);
+            console.log('[PLAYER] onPlaying');
+          }}
+          onError={(e: any) => {
+            console.error('[PLAYER] Error:', e);
+            const msg = e?.message || `player_error_${e?.code || 'unknown'}`;
+            setPlayerError(msg);
 
-              if (audioUnlocked && socket) {
-                const now = Date.now();
-                if (now - autoSkipRef.current.windowStart > 60000) {
-                  autoSkipRef.current.windowStart = now;
-                  autoSkipRef.current.count = 0;
-                }
-                if (now - autoSkipRef.current.lastAt > 2500 && autoSkipRef.current.count < 8) {
-                  autoSkipRef.current.lastAt = now;
-                  autoSkipRef.current.count += 1;
-                  setPlayerError('player_error_auto_skip');
-                  console.warn('[PLAYER] auto-skip emitting skip');
-                  socket.emit('skip');
-                }
+            if (audioUnlocked && socket) {
+              const now = Date.now();
+              if (now - autoSkipRef.current.windowStart > 60000) {
+                autoSkipRef.current.windowStart = now;
+                autoSkipRef.current.count = 0;
               }
-            }}
-            onProgress={(e: any) => {
-              if (!isSyncing) {
-                setCurrentTime((e?.playedSeconds || 0) * 1000);
+              if (now - autoSkipRef.current.lastAt > 2500 && autoSkipRef.current.count < 8) {
+                autoSkipRef.current.lastAt = now;
+                autoSkipRef.current.count += 1;
+                setPlayerError('player_error_auto_skip');
+                console.warn('[PLAYER] auto-skip emitting skip');
+                socket.emit('skip');
               }
-            }}
-            src={`https://www.youtube.com/watch?v=${currentSong.youtubeId}`}
-          />
-        )}
-      </div>
+            }
+          }}
+          onProgress={(e: any) => {
+            if (!isSyncing) {
+              setCurrentTime((e?.playedSeconds || 0) * 1000);
+            }
+          }}
+        />
+      )}
 
       {/* 3D Canvas with Cyberpunk Post-Processing */}
       <Canvas 
