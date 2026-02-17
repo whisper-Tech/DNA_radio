@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import pkg from 'spotify-url-info';
 const { getTracks } = pkg(fetch);
 import yts from 'yt-search';
