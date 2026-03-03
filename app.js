@@ -24,7 +24,7 @@ try {
 }
 
 try {
-  const spotMod = await import('./spotify.js?v=5');
+  const spotMod = await import('./spotify.js?v=6');
   audioController = spotMod.audioController;
   spotifyLogin = spotMod.spotifyLogin;
   spotifyLogout = spotMod.spotifyLogout;

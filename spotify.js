@@ -5,6 +5,12 @@
  * Controls a YouTube embed iframe via window.postMessage instead of
  * loading youtube.com/iframe_api (which gets blocked by ad blockers).
  * All YouTube video IDs are hardcoded in the playlist data.
+ * 
+ * Strategy:
+ * 1. Create iframe with a real video ID (not blank) so YouTube initializes the player
+ * 2. Send "listening" handshake to establish two-way postMessage channel
+ * 3. Once connected, use postMessage commands for subsequent track changes
+ * 4. If handshake never connects, fall back to swapping iframe src directly
  */
 
 // ====================================================
@@ -19,6 +25,7 @@ let _errorSkipCount = 0;
 let _debugLog = [];
 let _listeningInterval = null;
 let _currentVideoId = null;
+let _postMessageConnected = false; // true once we get initialDelivery/onReady
 
 // Player state constants (same as YT.PlayerState)
 const YTState = {
@@ -33,7 +40,7 @@ const YTState = {
 // Debug overlay for troubleshooting (selectable + copy button)
 function _updateDebug(msg) {
   _debugLog.push(new Date().toLocaleTimeString() + ' ' + msg);
-  if (_debugLog.length > 20) _debugLog.shift();
+  if (_debugLog.length > 30) _debugLog.shift();
   console.log('[DNA Radio Debug]', msg);
 
   let wrap = document.getElementById('yt-debug-wrap');
@@ -64,6 +71,23 @@ function _updateDebug(msg) {
   if (d) d.textContent = '[YT] ' + msg;
 }
 
+// Build the YouTube embed URL for a given video ID
+function _buildEmbedUrl(videoId) {
+  const params = new URLSearchParams({
+    enablejsapi: '1',
+    controls: '0',
+    disablekb: '1',
+    fs: '0',
+    modestbranding: '1',
+    playsinline: '1',
+    rel: '0',
+    autoplay: '1',
+    origin: window.location.origin,
+    widget_referrer: window.location.href,
+  });
+  return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
+}
+
 // Send a postMessage command to the YouTube iframe
 function _ytCommand(func, args) {
   if (!_ytIframe || !_ytIframe.contentWindow) return;
@@ -74,25 +98,58 @@ function _ytCommand(func, args) {
     id: 1,
     channel: 'widget',
   });
-  _ytIframe.contentWindow.postMessage(msg, '*');
+  try {
+    _ytIframe.contentWindow.postMessage(msg, 'https://www.youtube.com');
+  } catch (e) {
+    // Fallback to wildcard origin
+    try {
+      _ytIframe.contentWindow.postMessage(msg, '*');
+    } catch (e2) {}
+  }
 }
 
-// Initialize: create the iframe and set up two-way postMessage communication
+// Create or get the iframe container
+function _getContainer() {
+  return document.getElementById('yt-player-container');
+}
+
+// Initialize: create the iframe container and message listener
 (function initPostMessagePlayer() {
-  const container = document.getElementById('yt-player-container');
+  const container = _getContainer();
   if (!container) {
-    _updateDebug('ERROR: yt-player-container not found — will retry');
-    // Retry after DOM is ready
+    _updateDebug('ERROR: yt-player-container not found — will retry on DOMContentLoaded');
     document.addEventListener('DOMContentLoaded', initPostMessagePlayer);
     return;
   }
 
-  _updateDebug('Creating YouTube iframe (postMessage mode)...');
+  _updateDebug('postMessage player initialized, waiting for first track...');
 
-  // Clear any existing content
-  container.innerHTML = '';
+  // Listen for messages from the YouTube iframe
+  window.addEventListener('message', _handleYTMessage);
+})();
 
-  // Create the iframe directly — no external script needed
+// Create (or recreate) the iframe with a specific video ID
+function _createIframeWithVideo(videoId) {
+  const container = _getContainer();
+  if (!container) {
+    _updateDebug('ERROR: no yt-player-container');
+    return;
+  }
+
+  _updateDebug('Creating iframe for: ' + videoId);
+  
+  // Remove old iframe if exists
+  if (_ytIframe) {
+    try { _ytIframe.remove(); } catch (e) {}
+  }
+  
+  // Reset state
+  _postMessageConnected = false;
+  _ytReady = false;
+  // Create a new promise for this connection
+  const oldResolve = _ytReadyResolve;
+  // We need a fresh promise each time
+  
   _ytIframe = document.createElement('iframe');
   _ytIframe.id = 'yt-pm-player';
   _ytIframe.width = '320';
@@ -100,24 +157,20 @@ function _ytCommand(func, args) {
   _ytIframe.allow = 'autoplay; encrypted-media';
   _ytIframe.setAttribute('allowfullscreen', '');
   _ytIframe.style.border = 'none';
-  // Start with a blank video; we'll load videos via postMessage
-  _ytIframe.src = 'https://www.youtube.com/embed/?enablejsapi=1&controls=0&disablekb=1&fs=0&modestbranding=1&playsinline=1&rel=0&origin=' + encodeURIComponent(window.location.origin);
+  _ytIframe.src = _buildEmbedUrl(videoId);
   
+  container.innerHTML = '';
   container.appendChild(_ytIframe);
+  _currentVideoId = videoId;
 
-  // Listen for messages from the YouTube iframe
-  window.addEventListener('message', _handleYTMessage);
-
-  // Once the iframe loads, start sending the "listening" handshake
+  // Once loaded, try to establish postMessage channel
   _ytIframe.addEventListener('load', () => {
-    _updateDebug('iframe loaded, sending listening handshake...');
+    _updateDebug('iframe loaded for ' + videoId + ', sending handshake...');
     _startListeningHandshake();
   });
-})();
+}
 
 function _startListeningHandshake() {
-  // Send "listening" event to tell YouTube to start sending us events
-  // YouTube needs this to establish the postMessage channel
   let attempts = 0;
   if (_listeningInterval) clearInterval(_listeningInterval);
   
@@ -125,61 +178,75 @@ function _startListeningHandshake() {
     attempts++;
     if (!_ytIframe || !_ytIframe.contentWindow) return;
     
-    _ytIframe.contentWindow.postMessage(JSON.stringify({
-      event: 'listening',
-      id: 1,
-      channel: 'widget',
-    }), '*');
+    try {
+      _ytIframe.contentWindow.postMessage(JSON.stringify({
+        event: 'listening',
+        id: 1,
+        channel: 'widget',
+      }), 'https://www.youtube.com');
+    } catch (e) {
+      try {
+        _ytIframe.contentWindow.postMessage(JSON.stringify({
+          event: 'listening',
+          id: 1,
+          channel: 'widget',
+        }), '*');
+      } catch (e2) {}
+    }
     
-    if (_ytReady || attempts >= 60) {
+    if (_postMessageConnected || attempts >= 40) {
       clearInterval(_listeningInterval);
       _listeningInterval = null;
-      if (!_ytReady && attempts >= 60) {
-        _updateDebug('Handshake timeout after 60 attempts');
+      if (!_postMessageConnected && attempts >= 40) {
+        _updateDebug('Handshake timeout — postMessage not responding, using src-swap mode');
       }
     }
   }, 250);
 }
 
 function _handleYTMessage(event) {
-  // Only process messages from YouTube
-  if (!event.origin || !event.origin.includes('youtube.com')) return;
+  // Accept messages from YouTube origins
+  if (!event.origin || (!event.origin.includes('youtube.com') && !event.origin.includes('youtube-nocookie.com'))) return;
   
   let data;
   try {
     data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
   } catch (e) {
-    return; // Not JSON, ignore
+    return;
   }
 
   if (!data || !data.event) return;
 
   switch (data.event) {
     case 'initialDelivery':
-      // YouTube is talking to us — we're connected!
+      _postMessageConnected = true;
       if (!_ytReady) {
         _ytReady = true;
         _state.youtubeReady = true;
-        _updateDebug('postMessage READY — connected to YT');
+        _updateDebug('postMessage CONNECTED — full control available');
         if (_ytReadyResolve) {
           _ytReadyResolve();
           _ytReadyResolve = null;
         }
-        // Set initial volume
         _ytCommand('setVolume', [_state.volume]);
         _emit();
       }
-      // Extract duration if available
-      if (data.info && data.info.duration) {
-        _state.duration = data.info.duration;
+      if (data.info) {
+        if (typeof data.info.duration === 'number' && data.info.duration > 0) {
+          _state.duration = data.info.duration;
+        }
+        if (typeof data.info.currentTime === 'number') {
+          _state.progress = data.info.currentTime;
+        }
       }
       break;
 
     case 'onReady':
+      _postMessageConnected = true;
       if (!_ytReady) {
         _ytReady = true;
         _state.youtubeReady = true;
-        _updateDebug('onReady received via postMessage');
+        _updateDebug('onReady via postMessage');
         if (_ytReadyResolve) {
           _ytReadyResolve();
           _ytReadyResolve = null;
@@ -190,6 +257,7 @@ function _handleYTMessage(event) {
       break;
 
     case 'onStateChange': {
+      _postMessageConnected = true;
       const stateVal = data.info;
       const stateNames = {[-1]:'UNSTARTED', 0:'ENDED', 1:'PLAYING', 2:'PAUSED', 3:'BUFFERING', 5:'CUED'};
       _updateDebug('state=' + (stateNames[stateVal] || stateVal) + ' track=' + (_state.currentSong?.title || 'none'));
@@ -201,18 +269,25 @@ function _handleYTMessage(event) {
         audioController._onTrackEnded();
       } else if (stateVal === YTState.PLAYING) {
         _state.isPlaying = true;
+        if (!_ytReady) {
+          _ytReady = true;
+          _state.youtubeReady = true;
+          if (_ytReadyResolve) { _ytReadyResolve(); _ytReadyResolve = null; }
+        }
         _startYTProgress();
         _emit();
       } else if (stateVal === YTState.PAUSED) {
         _state.isPlaying = false;
         _stopYTProgress();
         _emit();
+      } else if (stateVal === YTState.BUFFERING) {
+        _updateDebug('Buffering...');
       }
       break;
     }
 
     case 'infoDelivery': {
-      // This is sent frequently while playing — contains currentTime, duration, playerState
+      _postMessageConnected = true;
       if (data.info) {
         if (typeof data.info.currentTime === 'number') {
           _state.progress = data.info.currentTime;
@@ -221,20 +296,22 @@ function _handleYTMessage(event) {
           _state.duration = data.info.duration;
         }
         if (typeof data.info.playerState === 'number') {
-          // Use playerState from infoDelivery to stay in sync
           const ps = data.info.playerState;
           if (ps === YTState.PLAYING && !_state.isPlaying) {
             _state.isPlaying = true;
             _startYTProgress();
-          } else if (ps === YTState.PAUSED && _state.isPlaying) {
+          } else if ((ps === YTState.PAUSED || ps === YTState.ENDED) && _state.isPlaying) {
+            if (ps === YTState.ENDED) {
+              _state.isPlaying = false;
+              _stopYTProgress();
+              _emit();
+              audioController._onTrackEnded();
+              return;
+            }
             _state.isPlaying = false;
             _stopYTProgress();
           }
         }
-        if (typeof data.info.volume === 'number') {
-          // Keep volume in sync (don't override user intent though)
-        }
-        // Emit to update the UI with new time/duration
         _emit();
       }
       break;
@@ -242,20 +319,19 @@ function _handleYTMessage(event) {
 
     case 'onError': {
       const errCode = data.info;
-      console.warn('[DNA Radio] YouTube player error:', errCode, 'for track:', _state.currentSong?.title);
+      console.warn('[DNA Radio] YouTube error:', errCode, 'track:', _state.currentSong?.title);
       _updateDebug('ERROR code=' + errCode + ' track=' + (_state.currentSong?.title || '?'));
       _stopYTProgress();
       _state.isPlaying = false;
       _emit();
       
-      // Error 150/101 = embed restricted
       if (errCode === 150 || errCode === 101) {
         _errorSkipCount++;
         if (_errorSkipCount <= 5) {
-          _updateDebug('Unplayable (embed blocked), skip #' + _errorSkipCount);
+          _updateDebug('Embed blocked, skip #' + _errorSkipCount);
           setTimeout(() => { if (_nextCb) _nextCb(); }, 2000);
         } else {
-          _updateDebug('Too many errors, stopping auto-skip');
+          _updateDebug('Too many errors, stopping');
           _errorSkipCount = 0;
         }
       }
@@ -265,11 +341,10 @@ function _handleYTMessage(event) {
 }
 
 function _startYTProgress() {
-  // infoDelivery gives us currentTime updates, but as a backup we also poll via emit
   _stopYTProgress();
   _ytProgressTimer = setInterval(() => {
     if (_state.isPlaying) {
-      _emit(); // Just re-emit so UI stays updated from infoDelivery data
+      _emit();
     }
   }, 1000);
 }
@@ -281,54 +356,67 @@ function _stopYTProgress() {
   }
 }
 
+// ====================================================
+// PLAY LOGIC — hybrid: postMessage if connected, src-swap as fallback
+// ====================================================
 async function youtubePlay(videoId) {
   if (!videoId) {
     _updateDebug('No YouTube ID for this track');
     return false;
   }
 
-  // Wait for postMessage connection to be ready
-  if (!_ytReady) {
-    _updateDebug('Waiting for postMessage ready (up to 15s)...');
-    try {
-      await Promise.race([
-        _ytReadyPromise,
-        new Promise((_, rej) => setTimeout(() => rej('timeout'), 15000))
-      ]);
-    } catch (e) {
-      _updateDebug('TIMEOUT waiting for postMessage — ytReady=' + _ytReady);
-      return false;
-    }
+  // If postMessage is connected AND we already have an iframe, use loadVideoById
+  if (_postMessageConnected && _ytIframe) {
+    _updateDebug('loadVideoById (postMessage): ' + videoId);
+    _currentVideoId = videoId;
+    _ytCommand('loadVideoById', [videoId]);
+    _ytCommand('setVolume', [_state.volume]);
+    return true;
   }
 
-  // Load and play via postMessage
-  _currentVideoId = videoId;
-  _ytCommand('loadVideoById', [videoId]);
-  _ytCommand('setVolume', [_state.volume]);
-  _updateDebug('loadVideoById via postMessage: ' + videoId);
+  // Otherwise, create/swap the iframe with the new video
+  // This always works — it's just loading a YouTube embed URL
+  _updateDebug('src-swap mode: loading ' + videoId);
+  _createIframeWithVideo(videoId);
+  
+  // The video will autoplay because we set autoplay=1 in the URL
+  // We consider this a success
   return true;
 }
 
 function youtubeStop() {
   _stopYTProgress();
-  _ytCommand('stopVideo');
+  if (_postMessageConnected) {
+    _ytCommand('stopVideo');
+  }
 }
 
 function youtubePause() {
   _stopYTProgress();
-  _ytCommand('pauseVideo');
+  if (_postMessageConnected) {
+    _ytCommand('pauseVideo');
+  }
 }
 
 function youtubeResume() {
-  _ytCommand('playVideo');
+  if (_postMessageConnected) {
+    _ytCommand('playVideo');
+  } else if (_ytIframe && _currentVideoId) {
+    // Can't resume via src-swap, reload the video
+    _createIframeWithVideo(_currentVideoId);
+  }
 }
 
 function youtubeSeek(seconds) {
-  _ytCommand('seekTo', [seconds, true]);
+  if (_postMessageConnected) {
+    _ytCommand('seekTo', [seconds, true]);
+  }
 }
 
 function youtubeSetVolume(vol) {
-  _ytCommand('setVolume', [vol]);
+  if (_postMessageConnected) {
+    _ytCommand('setVolume', [vol]);
+  }
 }
 
 // ====================================================
@@ -357,9 +445,7 @@ function _emit() {
 export const audioController = {
   _lastSpotifyPos: 0,
 
-  _onSpotifyState() {
-    // No-op — Spotify disabled
-  },
+  _onSpotifyState() {},
 
   _onTrackEnded() {
     console.log('[DNA Radio] Track ended, advancing...');
@@ -369,10 +455,10 @@ export const audioController = {
   },
 
   async init() {
-    console.log('[DNA Radio] YouTube postMessage audio mode (no external scripts)');
-    _updateDebug('audioController.init() — postMessage mode (no iframe_api.js)');
+    console.log('[DNA Radio] YouTube postMessage + src-swap audio mode');
+    _updateDebug('audioController.init() — postMessage + src-swap fallback');
     _state.source = 'youtube';
-    _state.youtubeReady = _ytReady;
+    _state.youtubeReady = true; // Always "ready" since src-swap always works
     _emit();
     return 'youtube';
   },
@@ -380,6 +466,8 @@ export const audioController = {
   async play(song) {
     _state.currentSong = song;
     _updateDebug('play(): ' + song.title + ' id=' + song.youtubeId);
+    
+    // Stop current playback
     youtubeStop();
 
     _state.source = 'youtube';
@@ -390,9 +478,12 @@ export const audioController = {
 
     const ok = await youtubePlay(song.youtubeId);
     if (ok) {
-      _updateDebug('loadVideoById OK: ' + song.youtubeId);
+      _updateDebug('Playing: ' + song.title);
+      // Start a progress timer even in src-swap mode
+      // (infoDelivery will override if postMessage connects)
+      _startYTProgress();
     } else {
-      _updateDebug('FAILED: ' + song.title + ' (player not ready)');
+      _updateDebug('FAILED: ' + song.title);
       _state.isPlaying = false;
     }
     _emit();
@@ -401,12 +492,14 @@ export const audioController = {
   async pause() {
     youtubePause();
     _state.isPlaying = false;
+    _stopYTProgress();
     _emit();
   },
 
   async resume() {
     youtubeResume();
     _state.isPlaying = true;
+    _startYTProgress();
     _emit();
   },
 
