@@ -24,7 +24,7 @@ try {
 }
 
 try {
-  const spotMod = await import('./spotify.js?v=6');
+  const spotMod = await import('./spotify.js?v=7');
   audioController = spotMod.audioController;
   spotifyLogin = spotMod.spotifyLogin;
   spotifyLogout = spotMod.spotifyLogout;
@@ -55,25 +55,7 @@ try {
   isSpotifyLoggedIn = () => false;
 }
 
-// ====================================================
-// CONSOLE EASTER EGG
-// ====================================================
-const _consoleProxy = new Proxy(console, {});
-(() => {
-  const style1 = 'color:#00e5ff;font-size:14px;font-weight:bold;text-shadow:0 0 10px #00e5ff;font-family:monospace;';
-  const style2 = 'color:#ffd700;font-size:11px;font-family:monospace;';
-  const style3 = 'color:rgba(0,229,255,0.6);font-size:10px;font-family:monospace;';
-  console.log('%c' + `
-██████╗ ███╗   ██╗ █████╗     ██████╗  █████╗ ██████╗ ██╗ ██████╗ 
-██╔══██╗████╗  ██║██╔══██╗    ██╔══██╗██╔══██╗██╔══██╗██║██╔═══██╗
-██║  ██║██╔██╗ ██║███████║    ██████╔╝███████║██║  ██║██║██║   ██║
-██║  ██║██║╚██╗██║██╔══██║    ██╔══██╗██╔══██║██║  ██║██║██║   ██║
-██████╔╝██║ ╚████║██║  ██║    ██║  ██║██║  ██║██████╔╝██║╚██████╔╝
-╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝    ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝ ╚═════╝ 
-`, style1);
-  console.log('%c⚡ REWARD FOR THE CURIOUS ⚡', style2);
-  console.log('%c\nYou have breached the perimeter of The Secret.\nThe system sees you.\nThe system... approves.\n\nEXECUTING: CURIOSITY_PROTOCOL.exe\nACCESS LEVEL: ELEVATED\nSTATUS: WELCOME, GHOST\n\n> Frequency locked. You were always meant to find this.\n', style3);
-})();
+// Console easter egg removed — clean console for debugging
 
 // ====================================================
 // PLAYLIST DATA
@@ -1150,9 +1132,44 @@ window.addEventListener('resize', () => {
 // IMPORT AND INIT HELIX
 // ====================================================
 async function initHelix() {
-  const { initDNAHelix } = await import('./helix.js');
-  initDNAHelix(state, {
-    onTrackSelect: (idx) => setCurrentTrack(idx, true),
-  });
-  window.helixInitialized = true;
+  try {
+    const { initDNAHelix } = await import('./helix.js');
+    initDNAHelix(state, {
+      onTrackSelect: (idx) => setCurrentTrack(idx, true),
+    });
+    window.helixInitialized = true;
+  } catch (e) {
+    console.warn('[DNA Radio] Helix init failed (WebGL not available):', e.message);
+    // Show a CSS fallback instead of black void
+    const container = document.getElementById('helix-container');
+    if (container) {
+      container.innerHTML = `
+        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+          background:radial-gradient(ellipse at center, rgba(0,229,255,0.05) 0%, transparent 70%);
+          position:relative;overflow:hidden;">
+          <div style="text-align:center;color:rgba(0,229,255,0.3);font-family:'Oxanium',monospace;">
+            <div style="font-size:2rem;letter-spacing:0.3em;">DNA RADIO</div>
+            <div style="font-size:0.7rem;margin-top:8px;letter-spacing:0.5em;opacity:0.5;">THE SECRET</div>
+          </div>
+          <div id="helix-css-dna" style="position:absolute;inset:0;pointer-events:none;"></div>
+        </div>`;
+      // Animated CSS dots as a lightweight DNA stand-in
+      const dnaEl = document.getElementById('helix-css-dna');
+      if (dnaEl) {
+        let dots = '';
+        for (let i = 0; i < 40; i++) {
+          const y = (i / 40) * 100;
+          const x1 = 50 + Math.sin(i * 0.3) * 20;
+          const x2 = 50 - Math.sin(i * 0.3) * 20;
+          const op = 0.15 + Math.abs(Math.sin(i * 0.3)) * 0.2;
+          dots += `<div style="position:absolute;top:${y}%;left:${x1}%;width:3px;height:3px;background:#00e5ff;border-radius:50%;opacity:${op}"></div>`;
+          dots += `<div style="position:absolute;top:${y}%;left:${x2}%;width:3px;height:3px;background:#00e5ff;border-radius:50%;opacity:${op}"></div>`;
+          if (i % 3 === 0) {
+            dots += `<div style="position:absolute;top:${y}%;left:${Math.min(x1,x2)}%;width:${Math.abs(x1-x2)}%;height:1px;background:rgba(0,229,255,${op*0.3})"></div>`;
+          }
+        }
+        dnaEl.innerHTML = dots;
+      }
+    }
+  }
 }

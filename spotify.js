@@ -136,6 +136,8 @@ function _createIframeWithVideo(videoId) {
     return;
   }
 
+  const embedUrl = _buildEmbedUrl(videoId);
+  console.log('[DNA Radio] Creating iframe:', embedUrl);
   _updateDebug('Creating iframe for: ' + videoId);
   
   // Remove old iframe if exists
@@ -157,7 +159,7 @@ function _createIframeWithVideo(videoId) {
   _ytIframe.allow = 'autoplay; encrypted-media';
   _ytIframe.setAttribute('allowfullscreen', '');
   _ytIframe.style.border = 'none';
-  _ytIframe.src = _buildEmbedUrl(videoId);
+  _ytIframe.src = embedUrl;
   
   container.innerHTML = '';
   container.appendChild(_ytIframe);
@@ -365,6 +367,8 @@ async function youtubePlay(videoId) {
     return false;
   }
 
+  console.log('[DNA Radio] youtubePlay():', videoId, 'postMessageConnected:', _postMessageConnected, 'hasIframe:', !!_ytIframe);
+
   // If postMessage is connected AND we already have an iframe, use loadVideoById
   if (_postMessageConnected && _ytIframe) {
     _updateDebug('loadVideoById (postMessage): ' + videoId);
@@ -376,7 +380,7 @@ async function youtubePlay(videoId) {
 
   // Otherwise, create/swap the iframe with the new video
   // This always works — it's just loading a YouTube embed URL
-  _updateDebug('src-swap mode: loading ' + videoId);
+  _updateDebug('src-swap mode: creating iframe for ' + videoId);
   _createIframeWithVideo(videoId);
   
   // The video will autoplay because we set autoplay=1 in the URL
@@ -465,8 +469,15 @@ export const audioController = {
 
   async play(song) {
     _state.currentSong = song;
+    console.log('[DNA Radio] play() called:', song.title, 'youtubeId:', song.youtubeId);
     _updateDebug('play(): ' + song.title + ' id=' + song.youtubeId);
     
+    if (!song.youtubeId) {
+      console.error('[DNA Radio] No youtubeId for track:', song.title);
+      _updateDebug('ERROR: no youtubeId for ' + song.title);
+      return;
+    }
+
     // Stop current playback
     youtubeStop();
 
