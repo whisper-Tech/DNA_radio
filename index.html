@@ -1,13 +1,186 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/Icons/icons8-playboy-gradient-32.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The Secret | secret.whisper.college</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DNA RADIO // THE SECRET</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="auth.css" />
+</head>
+<body>
+
+  <!-- AUTH OVERLAY -->
+  <div id="auth-overlay">
+    <!-- Fallback content shown until JS renders the gate -->
+    <noscript>
+      <div style="color:#00e5ff;text-align:center;padding:40px;font-family:monospace">
+        <h1>DNA RADIO // THE SECRET</h1>
+        <p>JavaScript is required to enter.</p>
+      </div>
+    </noscript>
+  </div>
+
+  <!-- AMBIENT PARTICLES -->
+  <div id="ambient-particles"></div>
+
+  <!-- STATUS BAR -->
+  <div id="status-bar">
+    <span>SYSTEM STATUS: OPTIMAL</span>
+    <span class="sep">//</span>
+    <span>CONNECTION: SECURE</span>
+    <span class="sep">//</span>
+    <span>TIME: <span id="status-time">--:--:--</span></span>
+    <span class="sep">//</span>
+    <span><span style="opacity:0.08;font-size:0.7em">r</span>DNA INTERFACE: ONLINE</span>
+  </div>
+
+  <!-- ===== PHASE 1: THE VOID ===== -->
+  <div id="phase-void">
+    <canvas id="void-canvas"></canvas>
+    <div id="void-hint">LOCATE THE BEACON // HOLD TO ENTER</div>
+  </div>
+
+  <!-- ===== PHASE 2: VORTEX TRANSITION ===== -->
+  <div id="phase-vortex" class="hidden">
+    <canvas id="vortex-canvas"></canvas>
+    <div id="vortex-text">
+      <div id="vortex-welcome">WELCOME</div>
+      <div id="vortex-secret">TO THE SECRET</div>
+    </div>
+  </div>
+
+  <!-- ===== PHASE 3: MAIN INTERFACE ===== -->
+  <div id="phase-main" class="hidden">
+
+    <!-- DNA HELIX AREA -->
+    <div id="helix-container">
+      <canvas id="helix-canvas"></canvas>
+      <div id="css2d-layer"></div>
+    </div>
+
+    <!-- LIBRARY SIDEBAR -->
+    <aside id="sidebar">
+      <div id="sidebar-header">
+        <div id="sidebar-title">THE SECRET PLAYLIST</div>
+        <div id="sidebar-count"><span id="song-count">50</span> TRACKS</div>
+      </div>
+      <div id="sidebar-search-wrap">
+        <input type="text" id="sidebar-search" placeholder="SEARCH TRACKS..." autocomplete="off" />
+        <span id="search-icon">&#8981;</span>
+      </div>
+      <div id="sidebar-list"></div>
+    </aside>
+
+    <!-- NOW PLAYING HUD -->
+    <div id="now-playing-hud">
+      <!-- Left: Song Info -->
+      <div id="hud-left">
+        <div id="hud-art">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="20" cy="20" r="19" stroke="#00e5ff" stroke-width="1.5" opacity="0.4"/>
+            <circle cx="20" cy="20" r="8" stroke="#00e5ff" stroke-width="1" opacity="0.5"/>
+            <circle cx="20" cy="20" r="3" fill="#00e5ff" opacity="0.6"/>
+          </svg>
+        </div>
+        <div id="hud-song-info">
+          <div id="hud-title">SELECT A TRACK</div>
+          <div id="hud-artist">DNA RADIO</div>
+          <div id="hud-health-display">
+            <span id="health-label">HEALTH</span>
+            <span id="health-bar-wrap"><span id="health-bar"></span></span>
+            <span id="health-val">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Controls -->
+      <div id="hud-center">
+        <div id="hud-controls">
+          <button id="btn-prev" title="Previous" aria-label="Previous track">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6h2v12H6V6zm3.5 6L18 6v12L9.5 12z" fill="currentColor"/></svg>
+          </button>
+          <button id="btn-reject" title="Reject" aria-label="Reject song" class="vote-btn reject">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </button>
+          <button id="btn-mute" title="Mute/Unmute" aria-label="Mute or unmute" class="mute-btn">
+            <svg id="unmuted-icon" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.54 8.46a5 5 0 010 7.07" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19.07 4.93a10 10 0 010 14.14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <svg id="muted-icon" viewBox="0 0 24 24" fill="none" class="hidden"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <button id="btn-accept" title="Accept" aria-label="Accept song" class="vote-btn accept">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/></svg>
+          </button>
+          <button id="btn-next" title="Next" aria-label="Next track">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M18 6h-2v12h2V6zM14.5 12L6 6v12l8.5-6z" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <div id="hud-progress-wrap">
+          <span id="hud-time-cur">0:00</span>
+          <div id="hud-progress-bar">
+            <div id="hud-progress-fill"></div>
+            <div id="hud-progress-thumb"></div>
+          </div>
+          <span id="hud-time-total">0:00</span>
+        </div>
+        <div id="hud-vote-display">
+          <span id="vote-status">NO ACTIVE TRACK</span>
+        </div>
+      </div>
+
+      <!-- Right: Volume + Spotify -->
+      <div id="hud-right">
+        <div id="volume-wrap">
+          <label for="volume-slider" id="vol-label">VOL</label>
+          <input type="range" id="volume-slider" min="0" max="100" value="65" />
+          <span id="vol-val">65</span>
+        </div>
+
+        <div id="spotify-toggle-wrap">
+          <button id="btn-spotify-toggle" class="spotify-btn" title="Audio powered by YouTube">&#9654; YOUTUBE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPOTIFY WIDGET (collapsible) -->
+    <div id="spotify-widget" class="hidden">
+      <iframe id="spotify-player"
+        src="https://open.spotify.com/embed/playlist/7clEOXvB7CyiUy1X0vmCus?utm_source=generator&theme=0"
+        width="100%" height="160" frameBorder="0"
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture">
+      </iframe>
+    </div>
+
+    <!-- MOBILE SIMPLIFIED LIST -->
+    <div id="mobile-list-view">
+      <div id="mobile-header">THE SECRET PLAYLIST</div>
+      <div id="mobile-search-wrap">
+        <input type="text" id="mobile-search" placeholder="SEARCH..." autocomplete="off"/>
+      </div>
+      <div id="mobile-track-list"></div>
+    </div>
+
+  </div><!-- /phase-main -->
+
+  <!-- HIDDEN YOUTUBE PLAYER (IFrame Player API) -->
+  <div id="yt-player-container" style="position:fixed;bottom:-200px;left:-200px;width:1px;height:1px;overflow:hidden;pointer-events:none;"></div>
+
+  <!-- Ambient radio removed - YouTube-only playback -->
+
+  <!-- YouTube-only audio mode - no Spotify SDK needed -->
+  <script src="app.js" type="module"></script>
+
+</body>
 </html>
