@@ -80,7 +80,7 @@
       </div>
       <div id="sidebar-search-wrap">
         <input type="text" id="sidebar-search" placeholder="SEARCH TRACKS..." autocomplete="off" />
-        <span id="search-icon">&#8981;</span>
+        <span id="search-icon">⌕</span>
       </div>
       <div id="sidebar-list"></div>
     </aside>
@@ -149,19 +149,12 @@
         </div>
 
         <div id="spotify-toggle-wrap">
-          <button id="btn-spotify-toggle" class="spotify-btn" title="Audio powered by YouTube">&#9654; YOUTUBE</button>
+          <button id="btn-spotify-toggle" class="spotify-btn" title="Audio powered by YouTube">▶ YOUTUBE</button>
         </div>
       </div>
     </div>
 
-    <!-- SPOTIFY WIDGET (collapsible) -->
-    <div id="spotify-widget" class="hidden">
-      <iframe id="spotify-player"
-        src="https://open.spotify.com/embed/playlist/7clEOXvB7CyiUy1X0vmCus?utm_source=generator&theme=0"
-        width="100%" height="160" frameBorder="0"
-        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture">
-      </iframe>
-    </div>
+    <!-- Spotify widget removed — YouTube-only playback -->
 
     <!-- MOBILE SIMPLIFIED LIST -->
     <div id="mobile-list-view">
@@ -174,12 +167,12 @@
 
   </div><!-- /phase-main -->
 
-  <!-- HIDDEN YOUTUBE PLAYER (IFrame Player API) -->
-  <div id="yt-player-container" style="position:fixed;bottom:-200px;left:-200px;width:1px;height:1px;overflow:hidden;pointer-events:none;"></div>
+  <!-- HIDDEN YOUTUBE PLAYER (IFrame Player API) — must be visible for YT to allow playback -->
+  <div id="yt-player-container" style="position:fixed;bottom:0;left:0;width:320px;height:180px;opacity:0.01;pointer-events:none;z-index:-1;"></div>
 
-  <!-- Ambient radio removed - YouTube-only playback -->
+  <!-- Ambient radio removed — YouTube-only playback -->
 
-  <!-- YouTube-only audio mode - no Spotify SDK needed -->
+  <!-- YouTube-only audio mode — no Spotify SDK needed -->
   <script src="app.js" type="module"></script>
 
 </body>

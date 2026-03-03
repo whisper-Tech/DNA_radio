@@ -14,6 +14,7 @@ let _ytReady = false;
 let _ytReadyResolve = null;
 const _ytReadyPromise = new Promise(r => { _ytReadyResolve = r; });
 let _ytProgressTimer = null;
+let _errorSkipCount = 0;  // Track consecutive errors to prevent infinite skip loops
 
 // Load YouTube IFrame API
 (function loadYTAPI() {
@@ -42,10 +43,10 @@ function _initYTPlayer() {
     container.appendChild(el);
   }
   _ytPlayer = new YT.Player('yt-api-player', {
-    height: '1',
-    width: '1',
+    height: '180',
+    width: '320',
     playerVars: {
-      autoplay: 1,
+      autoplay: 0,
       controls: 0,
       disablekb: 1,
       fs: 0,
@@ -74,14 +75,26 @@ function _initYTPlayer() {
           _state.isPlaying = false;
           _stopYTProgress();
           _emit();
+        } else if (event.data === YT.PlayerState.UNSTARTED) {
+          // Video cued but not started — may need user gesture
+          console.log('[DNA Radio] YouTube video cued (unstarted)');
         }
       },
       onError: (event) => {
-        console.warn('[DNA Radio] YouTube player error:', event.data);
-        // Error 150/101 = embedding disabled, skip to next
+        console.warn('[DNA Radio] YouTube player error:', event.data, 'for track:', _state.currentSong?.title);
+        _stopYTProgress();
+        _state.isPlaying = false;
+        _emit();
+        // Error 150/101 = embedding disabled — skip after a delay to avoid rapid cycling
         if (event.data === 150 || event.data === 101) {
-          _stopYTProgress();
-          audioController._onTrackEnded();
+          _errorSkipCount++;
+          if (_errorSkipCount <= 5) {
+            console.log('[DNA Radio] Unplayable track, skipping... (skip #' + _errorSkipCount + ')');
+            setTimeout(() => { if (_nextCb) _nextCb(); }, 2000);
+          } else {
+            console.warn('[DNA Radio] Too many consecutive errors — stopping auto-skip');
+            _errorSkipCount = 0;
+          }
         }
       },
     },
@@ -123,8 +136,13 @@ async function youtubePlay(videoId) {
   }
 
   if (_ytPlayer && _ytPlayer.loadVideoById) {
-    _ytPlayer.loadVideoById(videoId);
-    _ytPlayer.setVolume(_state.volume);
+    try {
+      _ytPlayer.loadVideoById(videoId);
+      _ytPlayer.setVolume(_state.volume);
+    } catch (e) {
+      console.warn('[DNA Radio] loadVideoById error:', e);
+      return false;
+    }
     return true;
   }
   return false;
@@ -189,7 +207,7 @@ export const audioController = {
   _lastSpotifyPos: 0,
 
   _onSpotifyState() {
-    // No-op - Spotify disabled
+    // No-op — Spotify disabled
   },
 
   _onTrackEnded() {
@@ -216,14 +234,17 @@ export const audioController = {
     _state.progress = 0;
     _state.duration = 0;
 
+    // Reset error skip count on successful play request
+    _errorSkipCount = 0;
+
     // Use the hardcoded youtubeId from the song object
     const ok = await youtubePlay(song.youtubeId);
     if (ok) {
       console.log('[DNA Radio] Playing:', song.title, '-', song.artist, '(', song.youtubeId, ')');
     } else {
-      console.warn('[DNA Radio] Failed to play:', song.title, '- skipping');
-      // Auto-skip to next after a brief delay
-      setTimeout(() => { if (_nextCb) _nextCb(); }, 1000);
+      console.warn('[DNA Radio] Failed to play:', song.title, '— YouTube player not ready');
+      _state.isPlaying = false;
+      // Do NOT auto-skip — let user click play or next manually
     }
     _emit();
   },
@@ -283,7 +304,7 @@ export const audioController = {
 
 // Stubs so app.js imports don't break
 export function spotifyLogin() {
-  console.log('[DNA Radio] Spotify is disabled - using YouTube playback');
+  console.log('[DNA Radio] Spotify is disabled — using YouTube playback');
 }
 
 export function spotifyLogout() {}

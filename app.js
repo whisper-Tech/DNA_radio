@@ -1,10 +1,10 @@
 /**
  * DNA RADIO // THE SECRET
  * Main Application Logic
- * Phases: Void -> Vortex Transition -> Main Interface
+ * Phases: Void → Vortex Transition → Main Interface
  */
 
-// Dynamic imports with fallbacks
+// Dynamic imports with fallbacks — so auth gate ALWAYS renders even if spotify fails
 let audioController, spotifyLogin, spotifyLogout, isSpotifyLoggedIn;
 let initAuth, isLoggedIn, getCurrentUser, isAdmin;
 
@@ -16,6 +16,7 @@ try {
   isAdmin = authMod.isAdmin;
 } catch (e) {
   console.error('[DNA Radio] CRITICAL: auth.js failed to load:', e);
+  // Absolute fallback — show the page anyway
   initAuth = (cb) => { cb && cb(); };
   isLoggedIn = () => false;
   getCurrentUser = () => null;
@@ -29,7 +30,8 @@ try {
   spotifyLogout = spotMod.spotifyLogout;
   isSpotifyLoggedIn = spotMod.isSpotifyLoggedIn;
 } catch (e) {
-  console.warn('[DNA Radio] spotify.js failed to load:', e);
+  console.warn('[DNA Radio] spotify.js failed to load — audio disabled:', e);
+  // Stub out the audio controller so the rest of the app still works
   audioController = {
     init: async () => 'none',
     play: async () => {},
@@ -87,8 +89,8 @@ const PLAYLIST = [
   { id: "s8",  title: "Best Part Of The Story",                artist: "SkyDxddy",                                    health: 0, status: "active", youtubeId: "4Av1L5Rmoj0" },
   { id: "s9",  title: "God Of War",                            artist: "SkyDxddy",                                    health: 0, status: "active", youtubeId: "isvwPvc6Dqk" },
   { id: "s10", title: "SNAP",                                  artist: "Rosa Linn",                                   health: 0, status: "active", youtubeId: "Lo4_K4relMg" },
-  { id: "s11", title: "kill the girl",                         artist: "LOLO",                                        health: 0, status: "active", youtubeId: "zmH7PJiR2yk" },
-  { id: "s12", title: "5,6,7,8",                               artist: "LOLO, girlfriends",                           health: 0, status: "active", youtubeId: "NVOhlLfcQ7U" },
+  { id: "s11", title: "kill the girl",                         artist: "LØLØ",                                        health: 0, status: "active", youtubeId: "zmH7PJiR2yk" },
+  { id: "s12", title: "5,6,7,8",                               artist: "LØLØ, girlfriends",                           health: 0, status: "active", youtubeId: "NVOhlLfcQ7U" },
   { id: "s13", title: "It Wasn't Easy To Be Happy For You",    artist: "The Lumineers",                               health: 0, status: "active", youtubeId: "eGReASgVM1Q" },
   { id: "s14", title: "What's Stopping You",                   artist: "P!X!E",                                       health: 0, status: "active", youtubeId: "o1wxgIps1e4" },
   { id: "s15", title: "WATCH THIS",                            artist: "TAELA",                                       health: 0, status: "active", youtubeId: "iycrMFBrnsg" },
@@ -98,9 +100,9 @@ const PLAYLIST = [
   { id: "s19", title: "Bullet",                                artist: "Hollywood Undead",                            health: 0, status: "active", youtubeId: "lP077RitNAc" },
   { id: "s20", title: "Such Small Hands",                      artist: "La Dispute",                                  health: 0, status: "active", youtubeId: "XlppZKMYNys" },
   { id: "s21", title: "Sara",                                  artist: "We Three",                                    health: 0, status: "active", youtubeId: "IlvELjeisqE" },
-  { id: "s22", title: "HELLO LONELINESS",                      artist: "Ekoh, Lo Spirit",                             health: 0, status: "active", youtubeId: "wAtFJAqTVhA" },
+  { id: "s22", title: "HELLO LØNELINESS",                      artist: "Ekoh, Lø Spirit",                             health: 0, status: "active", youtubeId: "wAtFJAqTVhA" },
   { id: "s23", title: "Lilith",                                artist: "Halsey",                                      health: 0, status: "active", youtubeId: "9PdH-zavwO4" },
-  { id: "s24", title: "007",                                   artist: "LOLO",                                        health: 0, status: "active", youtubeId: "4okJouEbZ_s" },
+  { id: "s24", title: "007",                                   artist: "LØLØ",                                        health: 0, status: "active", youtubeId: "4okJouEbZ_s" },
   { id: "s25", title: "GrokBlocked",                           artist: "Pie For Billy",                               health: 0, status: "active", youtubeId: "gGcKxx0yvfE" },
   { id: "s26", title: "Mud",                                   artist: "CARR",                                        health: 0, status: "active", youtubeId: "g9X2aSt15jQ" },
   { id: "s27", title: "Enemy",                                 artist: "Arrested Youth",                              health: 0, status: "active", youtubeId: "z3PXjKxEkjo" },
@@ -117,7 +119,7 @@ const PLAYLIST = [
   { id: "s38", title: "Freckles",                              artist: "honestav",                                    health: 0, status: "active", youtubeId: "BM8y6sVVH2E" },
   { id: "s39", title: "The Other Side",                        artist: "Michael Marcagi",                             health: 0, status: "active", youtubeId: "TuQ4im63cMY" },
   { id: "s40", title: "HORROR SHOW",                           artist: "Hot Milk",                                    health: 0, status: "active", youtubeId: "OBZ84gQlBtc" },
-  { id: "s41", title: "BLOSSOM",                               artist: "RORY",                                        health: 0, status: "active", youtubeId: "Ya8dZyiD2gE" },
+  { id: "s41", title: "BLOSSOM",                               artist: "RØRY",                                        health: 0, status: "active", youtubeId: "Ya8dZyiD2gE" },
   { id: "s42", title: "For the Misfits",                       artist: "SkyDxddy",                                    health: 0, status: "active", youtubeId: "WurYAHXEMXQ" },
   { id: "s43", title: "Dear Diary",                            artist: "KidShazam, SkyDxddy, PONS",                   health: 0, status: "active", youtubeId: "IGgxRH7B86M" },
   { id: "s44", title: "Angel of Death",                        artist: "SkyDxddy",                                    health: 0, status: "active", youtubeId: "-_GBaVjCsOc" },
@@ -130,21 +132,22 @@ const PLAYLIST = [
 ];
 
 // ====================================================
-// APP STATE
+// APP STATE (in-memory only)
 // ====================================================
 const state = {
-  phase: 'void',
+  phase: 'void',           // void | vortex | main
   currentIndex: 0,
-  queue: [...PLAYLIST],
+  queue: [...PLAYLIST],    // working copy
   isPlaying: false,
-  votes: {},
-  healthScores: {},
+  votes: {},               // songId → 'accept' | 'reject'
+  healthScores: {},        // songId → number
   visitorId: generateVisitorId(),
   progress: 0,
   duration: 0,
   progressTimer: null,
 };
 
+// Ephemeral fingerprint
 function generateVisitorId() {
   const nav = navigator.userAgent + navigator.language + screen.width + screen.height;
   let hash = 0;
@@ -155,6 +158,9 @@ function generateVisitorId() {
   return 'v_' + Math.abs(hash) + '_' + Date.now().toString(36);
 }
 
+// ====================================================
+// STATUS BAR CLOCK
+// ====================================================
 function updateStatusTime() {
   const el = document.getElementById('status-time');
   if (el) {
@@ -166,7 +172,7 @@ setInterval(updateStatusTime, 1000);
 updateStatusTime();
 
 // ====================================================
-// PHASE 1: THE VOID
+// PHASE 1: THE VOID - Starfield + Beacon
 // ====================================================
 const voidCanvas = document.getElementById('void-canvas');
 const voidCtx = voidCanvas.getContext('2d');
@@ -177,7 +183,7 @@ let holdStart = null;
 let holdProgress = 0;
 let holdActive = false;
 let holdRAF = null;
-const HOLD_DURATION = 2000;
+const HOLD_DURATION = 2000; // 2 seconds
 
 function resizeVoidCanvas() {
   voidCanvas.width = window.innerWidth;
@@ -197,6 +203,7 @@ function createStars() {
       twinklePhase: Math.random() * Math.PI * 2,
     });
   }
+  // Beacon: center-ish but slightly off
   beaconStar = {
     x: voidCanvas.width * 0.5 + (Math.random() - 0.5) * 80,
     y: voidCanvas.height * 0.45 + (Math.random() - 0.5) * 80,
@@ -212,6 +219,7 @@ function animateVoid() {
   voidCtx.clearRect(0, 0, voidCanvas.width, voidCanvas.height);
   const t = Date.now() * 0.001;
 
+  // Draw regular stars
   for (const s of stars) {
     s.twinklePhase += s.twinkleSpeed;
     const a = s.alpha * (0.5 + 0.5 * Math.sin(s.twinklePhase));
@@ -221,10 +229,12 @@ function animateVoid() {
     voidCtx.fill();
   }
 
+  // Draw Beacon
   if (beaconStar) {
     const pulse = 0.5 + 0.5 * Math.sin(t * 2.5);
     const glowR = 8 + pulse * 6;
 
+    // Outer glow rings
     for (let i = 3; i > 0; i--) {
       const grad = voidCtx.createRadialGradient(beaconStar.x, beaconStar.y, 0, beaconStar.x, beaconStar.y, glowR * i);
       grad.addColorStop(0, `rgba(0,229,255,${0.15 / i})`);
@@ -235,11 +245,13 @@ function animateVoid() {
       voidCtx.fill();
     }
 
+    // Core star
     voidCtx.beginPath();
     voidCtx.arc(beaconStar.x, beaconStar.y, beaconStar.r + pulse * 2, 0, Math.PI * 2);
     voidCtx.fillStyle = `rgba(0,229,255,${0.8 + pulse * 0.2})`;
     voidCtx.fill();
 
+    // Hold progress ring
     if (holdActive && holdProgress > 0) {
       const angle = -Math.PI / 2 + holdProgress * Math.PI * 2;
       voidCtx.beginPath();
@@ -248,6 +260,7 @@ function animateVoid() {
       voidCtx.lineWidth = 2;
       voidCtx.stroke();
 
+      // Background ring
       voidCtx.beginPath();
       voidCtx.arc(beaconStar.x, beaconStar.y, 22, 0, Math.PI * 2);
       voidCtx.strokeStyle = 'rgba(0,229,255,0.1)';
@@ -292,10 +305,12 @@ function cancelHold() {
   document.getElementById('void-hint').textContent = 'LOCATE THE BEACON // HOLD TO ENTER';
 }
 
+// Mouse events
 voidCanvas.addEventListener('mousedown', e => startHold(e.offsetX, e.offsetY));
 voidCanvas.addEventListener('mouseup', cancelHold);
 voidCanvas.addEventListener('mouseleave', cancelHold);
 
+// Touch events
 voidCanvas.addEventListener('touchstart', e => {
   const r = voidCanvas.getBoundingClientRect();
   const t = e.touches[0];
@@ -310,6 +325,8 @@ window.addEventListener('resize', () => {
   createStars();
 });
 
+// Initialize void phase — deferred until auth gate is passed
+// (called via startVoidPhase() once the user passes the auth gate)
 function startVoidPhase() {
   resizeVoidCanvas();
   createStars();
@@ -327,6 +344,7 @@ function resizeVortexCanvas() {
   vortexCanvas.height = window.innerHeight;
 }
 
+// Vortex particles
 let vortexParticles = [];
 
 function createVortexParticles() {
@@ -337,8 +355,8 @@ function createVortexParticles() {
     vortexParticles.push({
       x: window.innerWidth / 2 + Math.cos(angle) * radius,
       y: window.innerHeight / 2 + Math.sin(angle) * radius,
-      tx: window.innerWidth / 2,
-      ty: window.innerHeight / 2,
+      tx: window.innerWidth / 2,  // target x
+      ty: window.innerHeight / 2,  // target y
       vx: 0, vy: 0,
       r: Math.random() * 2 + 0.5,
       alpha: Math.random() * 0.7 + 0.3,
@@ -346,7 +364,7 @@ function createVortexParticles() {
       angle,
       radius,
       spin: (Math.random() - 0.5) * 0.05,
-      phase: 0,
+      phase: 0,  // 0=converging, 1=helix
     });
   }
 }
@@ -366,10 +384,13 @@ function animateVortex(startTime) {
       const elapsed = (Date.now() - startTime) / 1000;
       vortexCtx.clearRect(0, 0, vortexCanvas.width, vortexCanvas.height);
 
+      // phase 0-8s: converge
+      // phase 8-12s: form helix bars
       const progress = Math.min(elapsed / 12, 1);
 
       for (const p of vortexParticles) {
         if (elapsed < 8) {
+          // Converge toward center in spiral
           const t = elapsed / 8;
           const targetAngle = p.angle + p.spin * elapsed * 60;
           const targetRadius = p.radius * (1 - t * 0.85);
@@ -378,6 +399,7 @@ function animateVortex(startTime) {
           p.x += (tx - p.x) * 0.08;
           p.y += (ty - p.y) * 0.08;
         } else {
+          // Helix formation
           const helixT = (elapsed - 8) / 4;
           const helixPhase = (vortexParticles.indexOf(p) / vortexParticles.length);
           const angle = helixPhase * Math.PI * 4 + helixT * Math.PI;
@@ -406,10 +428,14 @@ function animateVortex(startTime) {
   });
 }
 
+// ====================================================
+// TRIGGER VORTEX
+// ====================================================
 async function triggerVortex() {
   holdActive = false;
   state.phase = 'vortex';
 
+  // Fade out void
   const voidEl = document.getElementById('phase-void');
   voidEl.style.transition = 'opacity 0.8s ease';
   voidEl.style.opacity = '0';
@@ -419,20 +445,24 @@ async function triggerVortex() {
   setTimeout(async () => {
     voidEl.classList.add('hidden');
 
+    // Show vortex phase
     const vortexEl = document.getElementById('phase-vortex');
     vortexEl.classList.remove('hidden');
     resizeVortexCanvas();
 
     const startTime = Date.now();
 
+    // 0-4s: WELCOME fades in
     setTimeout(() => {
       document.getElementById('vortex-welcome').classList.add('visible');
     }, 200);
 
+    // 4-8s: TO THE SECRET fades in
     setTimeout(() => {
       document.getElementById('vortex-secret').classList.add('visible');
     }, 4000);
 
+    // 8-12s: Text dissolves
     setTimeout(() => {
       const welcome = document.getElementById('vortex-welcome');
       const secret = document.getElementById('vortex-secret');
@@ -444,8 +474,10 @@ async function triggerVortex() {
       secret.style.transform = 'scale(1.1)';
     }, 8000);
 
+    // Start vortex particle animation
     await animateVortex(startTime);
 
+    // Transition to main
     vortexEl.style.transition = 'opacity 1s ease';
     vortexEl.style.opacity = '0';
     setTimeout(() => {
@@ -467,20 +499,32 @@ async function initMainInterface() {
   mainEl.style.opacity = '0';
   mainEl.style.transition = 'opacity 1.2s ease';
 
+  // Load votes from backend
   await loadVotesFromBackend();
+
+  // Build sidebar
   buildSidebar();
+
+  // Build mobile list
   buildMobileList();
 
+  // Init Three.js helix (after layout is computed)
   if (window.innerWidth > 768) {
+    // Delay init to ensure container has computed dimensions
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     initHelix();
   }
 
+  // Setup HUD controls
   setupHUD();
+
+  // Setup drag & drop
   setupDragDrop();
 
+  // Initialize real audio system
   await audioController.init();
 
+  // Register audio state change callback
   audioController.onStateChange((audioState) => {
     state.isPlaying = audioState.isPlaying;
     state.progress = audioState.progress;
@@ -489,28 +533,44 @@ async function initMainInterface() {
     updateAudioSourceIndicator();
   });
 
+  // Wire next/prev callbacks to audioController
   audioController.setNextCallback(playNext);
   audioController.setPrevCallback(playPrev);
 
+  // Update Spotify button state
   updateSpotifyButtonState();
-  audioController.setVolume(65);
-  setCurrentTrack(0, true);
 
+  // Set initial volume to 65%
+  audioController.setVolume(65);
+
+  // Cue first track but do NOT auto-play (browser blocks autoplay before user gesture)
+  setCurrentTrack(0, false);
+
+  // Fade in
   setTimeout(() => { mainEl.style.opacity = '1'; }, 50);
 
+  // Toast container
   const toast = document.createElement('div');
   toast.id = 'inject-toast';
   document.body.appendChild(toast);
 }
 
+// ====================================================
+// VOTE SYSTEM (in-memory only — no backend required)
+// ====================================================
 async function loadVotesFromBackend() {
-  console.log('[DNA Radio] Running in static mode - votes are session-only');
+  // No backend — votes are in-memory only for this session
+  console.log('[DNA Radio] Running in static mode — votes are session-only');
 }
 
 async function submitVote(songId, voteType) {
-  console.log(`[DNA Radio] Vote: ${songId} -> ${voteType}`);
+  // No backend — vote recorded in state.votes / state.healthScores only
+  console.log(`[DNA Radio] Vote: ${songId} → ${voteType}`);
 }
 
+// ====================================================
+// HUD SETUP
+// ====================================================
 function setupHUD() {
   const btnMute = document.getElementById('btn-mute');
   const btnPrev = document.getElementById('btn-prev');
@@ -535,6 +595,7 @@ function setupHUD() {
 
   btnSpotify.addEventListener('click', handleSpotifyButtonClick);
 
+  // Progress bar click
   progressBar.addEventListener('click', e => {
     const rect = progressBar.getBoundingClientRect();
     const fraction = (e.clientX - rect.left) / rect.width;
@@ -542,44 +603,62 @@ function setupHUD() {
   });
 }
 
+// ====================================================
+// TRACK MANAGEMENT
+// ====================================================
 function setCurrentTrack(index, autoPlay = false) {
   if (index < 0 || index >= state.queue.length) return;
   state.currentIndex = index;
   const song = state.queue[index];
 
+  // Update HUD
   document.getElementById('hud-title').textContent = song.title;
   document.getElementById('hud-artist').textContent = song.artist;
   document.getElementById('hud-time-cur').textContent = '0:00';
   document.getElementById('hud-time-total').textContent = '0:00';
   updateProgressUI(0);
+
+  // Update health display
   updateHealthDisplay(song);
+
+  // Update vote button states
   updateVoteButtonStates(song.id);
 
-  if (window.helixSetCurrentTrack) window.helixSetCurrentTrack(index);
+  // Update helix if available
+  if (window.helixSetCurrentTrack) {
+    window.helixSetCurrentTrack(index);
+  }
 
+  // Update sidebar active state
   updateSidebarActiveState(song.id);
   updateMobileActiveState(song.id);
 
+  // Update vote status display
   const score = song.health || 0;
   const voteStatusEl = document.getElementById('vote-status');
   if (score >= 10) {
-    voteStatusEl.textContent = 'IMMORTAL TRACK';
+    voteStatusEl.textContent = '★ IMMORTAL TRACK ★';
     voteStatusEl.style.color = '#ffd700';
   } else if (score <= -10) {
-    voteStatusEl.textContent = 'TRACK CONDEMNED';
+    voteStatusEl.textContent = '✕ TRACK CONDEMNED';
     voteStatusEl.style.color = '#ff0040';
   } else {
     voteStatusEl.textContent = `HEALTH SCORE: ${score >= 0 ? '+' : ''}${score} / 10`;
     voteStatusEl.style.color = '';
   }
 
+  // Play via real audio controller if autoPlay requested
   if (autoPlay) {
     state.isPlaying = true;
     audioController.play(song);
   }
 }
 
-function startProgressSimulation() {}
+// startProgressSimulation is replaced by real audioController state updates
+// Kept as no-op to avoid reference errors from any existing calls
+function startProgressSimulation() {
+  // No-op: real audio playback is handled by audioController
+}
 
 function updateProgressUI(override) {
   const progress = override !== undefined ? override : state.progress;
@@ -598,6 +677,9 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+// ====================================================
+// MUTE / UNMUTE (radio-style: always playing, user controls mute)
+// ====================================================
 let isMuted = false;
 
 function toggleMute() {
@@ -631,10 +713,14 @@ function playPrev() {
   setCurrentTrack(prev, state.isPlaying);
 }
 
+// ====================================================
+// VOTING
+// ====================================================
 function voteOnCurrent(voteType) {
   const song = state.queue[state.currentIndex];
   if (!song) return;
 
+  // Check if already voted
   if (state.votes[song.id]) {
     showToast('ALREADY VOTED ON THIS TRACK');
     return;
@@ -652,36 +738,42 @@ function voteOnCurrent(voteType) {
 
   state.healthScores[song.id] = song.health;
 
+  // Update UI
   updateHealthDisplay(song);
   updateVoteButtonStates(song.id);
   updateSidebarTrackHealth(song.id, song.health);
   updateMobileTrackHealth(song.id, song.health);
 
-  if (window.helixUpdateHealth) window.helixUpdateHealth(song.id, song.health);
+  // Update helix
+  if (window.helixUpdateHealth) {
+    window.helixUpdateHealth(song.id, song.health);
+  }
 
+  // Update vote status
   const score = song.health;
   const voteStatusEl = document.getElementById('vote-status');
   if (score >= 10) {
-    voteStatusEl.textContent = 'IMMORTAL TRACK';
+    voteStatusEl.textContent = '★ IMMORTAL TRACK ★';
     voteStatusEl.style.color = '#ffd700';
-    showToast('TRACK ACHIEVED IMMORTAL STATUS');
+    showToast('★ TRACK ACHIEVED IMMORTAL STATUS ★');
   } else if (score <= -10) {
-    voteStatusEl.textContent = 'TRACK CONDEMNED';
+    voteStatusEl.textContent = '✕ TRACK CONDEMNED';
     voteStatusEl.style.color = '#ff0040';
-    showToast('TRACK HAS BEEN CONDEMNED');
+    showToast('✕ TRACK HAS BEEN CONDEMNED');
   } else {
     voteStatusEl.textContent = `HEALTH SCORE: ${score >= 0 ? '+' : ''}${score} / 10`;
     voteStatusEl.style.color = '';
     showToast(voteType === 'accept' ? `ACCEPTED // HEALTH: +${score}` : `REJECTED // HEALTH: ${score}`);
   }
 
+  // Persist to backend
   submitVote(song.id, voteType);
 }
 
 function flashHUD(type) {
   const hud = document.getElementById('now-playing-hud');
   hud.classList.remove('flash-accept', 'flash-reject');
-  void hud.offsetWidth;
+  void hud.offsetWidth; // reflow
   hud.classList.add(type === 'accept' ? 'flash-accept' : 'flash-reject');
 }
 
@@ -691,6 +783,7 @@ function updateHealthDisplay(song) {
   const bar = document.getElementById('health-bar');
   el.textContent = (score >= 0 ? '+' : '') + score;
 
+  // Bar: 0% = -10, 50% = 0, 100% = +10
   const pct = ((score + 10) / 20) * 100;
   bar.style.width = pct + '%';
 
@@ -722,6 +815,9 @@ function updateVoteButtonStates(songId) {
   btnReject.classList.toggle('voted', voted === 'reject');
 }
 
+// ====================================================
+// SIDEBAR
+// ====================================================
 function buildSidebar() {
   const list = document.getElementById('sidebar-list');
   list.innerHTML = '';
@@ -732,6 +828,7 @@ function buildSidebar() {
     list.appendChild(item);
   });
 
+  // Search filter
   document.getElementById('sidebar-search').addEventListener('input', e => {
     filterSidebar(e.target.value);
   });
@@ -765,15 +862,20 @@ function createSidebarTrack(song, idx) {
     <div class="track-health ${healthClass}">${score !== 0 ? (score > 0 ? '+' : '') + score : '·'}</div>
   `;
 
-  item.addEventListener('click', () => { setCurrentTrack(idx, true); });
+  item.addEventListener('click', () => {
+    setCurrentTrack(idx, true);
+  });
 
+  // Drag events
   item.addEventListener('dragstart', e => {
     e.dataTransfer.setData('text/plain', JSON.stringify({ songId: song.id, songIdx: idx }));
     e.dataTransfer.effectAllowed = 'copy';
     item.style.opacity = '0.5';
   });
 
-  item.addEventListener('dragend', () => { item.style.opacity = '1'; });
+  item.addEventListener('dragend', () => {
+    item.style.opacity = '1';
+  });
 
   return item;
 }
@@ -809,6 +911,9 @@ function updateSidebarTrackHealth(songId, score) {
   icon.className = 'track-icon' + (score >= 10 ? ' immortal' : score <= -10 ? ' rejected' : '');
 }
 
+// ====================================================
+// MOBILE LIST
+// ====================================================
 function buildMobileList() {
   const list = document.getElementById('mobile-track-list');
   list.innerHTML = '';
@@ -844,6 +949,7 @@ function updateMobileActiveState(songId) {
 }
 
 function updateMobileTrackHealth(songId, score) {
+  // Visual feedback on mobile
   const el = document.querySelector(`.mobile-track[data-id="${songId}"]`);
   if (!el) return;
   if (score >= 10) el.style.borderLeft = '3px solid #ffd700';
@@ -853,6 +959,9 @@ function updateMobileTrackHealth(songId, score) {
   else el.style.borderLeft = '';
 }
 
+// ====================================================
+// DRAG & DROP (sidebar → helix)
+// ====================================================
 function setupDragDrop() {
   const helixContainer = document.getElementById('helix-container');
   if (!helixContainer) return;
@@ -875,6 +984,7 @@ function setupDragDrop() {
       const song = state.queue.find(s => s.id === data.songId);
       if (!song) return;
 
+      // Inject after current playing
       const insertAt = state.currentIndex + 1;
       const existing = state.queue.findIndex(s => s.id === data.songId);
       if (existing !== -1) state.queue.splice(existing, 1);
@@ -882,19 +992,23 @@ function setupDragDrop() {
 
       if (window.helixRebuild) window.helixRebuild();
       buildSidebar();
-      showToast(`INJECTED: ${song.title} -> QUEUE POSITION ${insertAt + 1}`);
+      showToast(`INJECTED: ${song.title} → QUEUE POSITION ${insertAt + 1}`);
     } catch (e) {}
   });
 }
 
+// ====================================================
+// SPOTIFY BUTTON HANDLER
+// ====================================================
 function handleSpotifyButtonClick() {
+  // YouTube-only mode — toggle the Spotify embed widget or show info
   showToast('AUDIO POWERED BY YOUTUBE');
 }
 
 function updateSpotifyButtonState() {
   const btn = document.getElementById('btn-spotify-toggle');
   if (!btn) return;
-  btn.textContent = 'YOUTUBE';
+  btn.textContent = '▶ YOUTUBE';
   btn.title = 'Audio powered by YouTube';
   btn.classList.add('spotify-connected');
   updateAudioSourceIndicator();
@@ -911,21 +1025,27 @@ function updateAudioSourceIndicator() {
   const audioState = audioController.getState();
   indicator.className = '';
   if (audioState.source === 'spotify') {
-    indicator.textContent = 'SPOTIFY';
+    indicator.textContent = '♫ SPOTIFY';
     indicator.classList.add('source-spotify');
   } else if (audioState.source === 'youtube') {
-    indicator.textContent = 'YOUTUBE';
+    indicator.textContent = '▶ YOUTUBE';
     indicator.classList.add('source-youtube');
   } else {
     indicator.textContent = '';
   }
 }
 
+// ====================================================
+// SPOTIFY WIDGET TOGGLE (embed panel)
+// ====================================================
 function toggleSpotify() {
   const widget = document.getElementById('spotify-widget');
   widget.classList.toggle('hidden');
 }
 
+// ====================================================
+// TOAST NOTIFICATIONS
+// ====================================================
 let toastTimer = null;
 function showToast(msg) {
   const toast = document.getElementById('inject-toast');
@@ -936,22 +1056,33 @@ function showToast(msg) {
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
+// ====================================================
+// HELPERS
+// ====================================================
 function escHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// ====================================================
+// DEV BYPASS: Add ?skip to URL to jump straight to main
+// ====================================================
 if (location.search.includes('skip')) {
   document.getElementById('phase-void').classList.add('hidden');
+  // Skip auth gate too in dev mode
   const authOverlay = document.getElementById('auth-overlay');
   if (authOverlay) authOverlay.classList.add('hidden');
   initMainInterface();
 }
 
+// ====================================================
+// AMBIENT PARTICLES (CSS-based floating dots)
+// ====================================================
 function createAmbientParticles() {
   const container = document.getElementById('ambient-particles');
   if (!container) return;
   const count = 40;
 
+  // Shape weights: 40% dot, 35% star4, 25% bethlehem
   function pickShape() {
     const r = Math.random();
     if (r < 0.40) return 'particle-dot';
@@ -959,6 +1090,7 @@ function createAmbientParticles() {
     return 'particle-bethlehem';
   }
 
+  // Color weights: 82% white, 9% cyan, 9% yellow
   function pickColor() {
     const r = Math.random();
     if (r < 0.82) return 'particle-white';
@@ -974,11 +1106,11 @@ function createAmbientParticles() {
 
     let size;
     if (shape === 'particle-dot') {
-      size = 1 + Math.random() * 2;
+      size = 1 + Math.random() * 2; // 1–3px
     } else if (shape === 'particle-star4') {
-      size = 3 + Math.random() * 4;
+      size = 3 + Math.random() * 4; // 3–7px
     } else {
-      size = 4 + Math.random() * 4;
+      size = 4 + Math.random() * 4; // 4–8px
     }
 
     p.style.width = size + 'px';
@@ -992,18 +1124,31 @@ function createAmbientParticles() {
 }
 createAmbientParticles();
 
+// ====================================================
+// AUTH GATE — must pass before void phase begins
+// (skipped in dev mode via ?skip)
+// ====================================================
 if (!location.search.includes('skip')) {
   initAuth(() => {
+    // User passed the gate (logged in or entered as guest)
+    // Now start the void beacon phase
     startVoidPhase();
   });
 }
+// Note: ?skip mode skips both auth and void — jumps directly to main via the check below
 
+// ====================================================
+// WINDOW RESIZE - reinit helix on resize
+// ====================================================
 window.addEventListener('resize', () => {
   if (state.phase === 'main' && window.innerWidth > 768 && !window.helixInitialized) {
     initHelix();
   }
 });
 
+// ====================================================
+// IMPORT AND INIT HELIX
+// ====================================================
 async function initHelix() {
   const { initDNAHelix } = await import('./helix.js');
   initDNAHelix(state, {
