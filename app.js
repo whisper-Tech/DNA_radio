@@ -24,7 +24,7 @@ try {
 }
 
 try {
-  const spotMod = await import('./spotify.js?v=7');
+  const spotMod = await import('./spotify.js?v=8');
   audioController = spotMod.audioController;
   spotifyLogin = spotMod.spotifyLogin;
   spotifyLogout = spotMod.spotifyLogout;
@@ -1140,36 +1140,74 @@ async function initHelix() {
     window.helixInitialized = true;
   } catch (e) {
     console.warn('[DNA Radio] Helix init failed (WebGL not available):', e.message);
-    // Show a CSS fallback instead of black void
-    const container = document.getElementById('helix-container');
-    if (container) {
-      container.innerHTML = `
-        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;
-          background:radial-gradient(ellipse at center, rgba(0,229,255,0.05) 0%, transparent 70%);
-          position:relative;overflow:hidden;">
-          <div style="text-align:center;color:rgba(0,229,255,0.3);font-family:'Oxanium',monospace;">
-            <div style="font-size:2rem;letter-spacing:0.3em;">DNA RADIO</div>
-            <div style="font-size:0.7rem;margin-top:8px;letter-spacing:0.5em;opacity:0.5;">THE SECRET</div>
-          </div>
-          <div id="helix-css-dna" style="position:absolute;inset:0;pointer-events:none;"></div>
-        </div>`;
-      // Animated CSS dots as a lightweight DNA stand-in
-      const dnaEl = document.getElementById('helix-css-dna');
-      if (dnaEl) {
-        let dots = '';
-        for (let i = 0; i < 40; i++) {
-          const y = (i / 40) * 100;
-          const x1 = 50 + Math.sin(i * 0.3) * 20;
-          const x2 = 50 - Math.sin(i * 0.3) * 20;
-          const op = 0.15 + Math.abs(Math.sin(i * 0.3)) * 0.2;
-          dots += `<div style="position:absolute;top:${y}%;left:${x1}%;width:3px;height:3px;background:#00e5ff;border-radius:50%;opacity:${op}"></div>`;
-          dots += `<div style="position:absolute;top:${y}%;left:${x2}%;width:3px;height:3px;background:#00e5ff;border-radius:50%;opacity:${op}"></div>`;
-          if (i % 3 === 0) {
-            dots += `<div style="position:absolute;top:${y}%;left:${Math.min(x1,x2)}%;width:${Math.abs(x1-x2)}%;height:1px;background:rgba(0,229,255,${op*0.3})"></div>`;
-          }
-        }
-        dnaEl.innerHTML = dots;
-      }
+    buildCSSHelixFallback();
+  }
+}
+
+function buildCSSHelixFallback() {
+  const container = document.getElementById('helix-container');
+  if (!container) return;
+
+  // Inject keyframes for the rotation animation
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    @keyframes helixSpin { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+    @keyframes helixPulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+    @keyframes glowPulse { 0%,100% { opacity: 0.15; } 50% { opacity: 0.35; } }
+    .helix-node { transition: box-shadow 0.3s; }
+    .helix-node:hover { box-shadow: 0 0 12px 4px rgba(0,229,255,0.6) !important; }
+  `;
+  document.head.appendChild(styleEl);
+
+  container.innerHTML = `
+    <div style="width:100%;height:100%;position:relative;overflow:hidden;background:radial-gradient(ellipse at center, rgba(0,229,255,0.08) 0%, transparent 60%);">
+      <div id="helix-css-dna" style="position:absolute;left:50%;top:0;width:300px;margin-left:-150px;height:200%;animation:helixSpin 30s linear infinite;"></div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;">
+        <div style="text-align:center;">
+          <div style="color:rgba(0,229,255,0.5);font-family:'Oxanium',monospace;font-size:1.8rem;letter-spacing:0.4em;text-shadow:0 0 20px rgba(0,229,255,0.3);">DNA RADIO</div>
+          <div style="color:rgba(0,229,255,0.25);font-family:'Oxanium',monospace;font-size:0.65rem;margin-top:8px;letter-spacing:0.6em;">THE SECRET</div>
+        </div>
+      </div>
+      <div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.8) 100%);pointer-events:none;z-index:3;"></div>
+    </div>`;
+
+  const dnaEl = document.getElementById('helix-css-dna');
+  if (!dnaEl) return;
+
+  let html = '';
+  const totalRungs = 80; // doubled since we scroll the top half off
+  const rungH = 100 / totalRungs;
+
+  for (let i = 0; i < totalRungs; i++) {
+    const t = (i / totalRungs) * Math.PI * 6; // 3 full twists
+    const sin = Math.sin(t);
+    const cos = Math.cos(t);
+
+    // Two strand positions (opposite sides of helix)
+    const x1 = 50 + sin * 35; // percent within the 300px container
+    const x2 = 50 - sin * 35;
+    const y = i * rungH;
+
+    // Depth-based opacity (cos determines which strand is "in front")
+    const op1 = 0.4 + Math.max(0, cos) * 0.6;
+    const op2 = 0.4 + Math.max(0, -cos) * 0.6;
+    const size1 = 4 + Math.max(0, cos) * 4;
+    const size2 = 4 + Math.max(0, -cos) * 4;
+
+    // Strand nodes (the bright dots on each strand)
+    html += `<div class="helix-node" style="position:absolute;top:${y}%;left:${x1}%;width:${size1}px;height:${size1}px;margin-left:${-size1/2}px;margin-top:${-size1/2}px;background:#00e5ff;border-radius:50%;opacity:${op1};box-shadow:0 0 ${size1+2}px rgba(0,229,255,${op1*0.5});"></div>`;
+    html += `<div class="helix-node" style="position:absolute;top:${y}%;left:${x2}%;width:${size2}px;height:${size2}px;margin-left:${-size2/2}px;margin-top:${-size2/2}px;background:#00e5ff;border-radius:50%;opacity:${op2};box-shadow:0 0 ${size2+2}px rgba(0,229,255,${op2*0.5});"></div>`;
+
+    // Rungs (horizontal bars connecting the strands) — every 2nd rung
+    if (i % 2 === 0) {
+      const rungOp = 0.15 + Math.abs(sin) * 0.2;
+      const lx = Math.min(x1, x2);
+      const w = Math.abs(x1 - x2);
+      // Color varies along the helix
+      const hue = 180 + (i / totalRungs) * 30; // cyan to teal range
+      html += `<div style="position:absolute;top:${y}%;left:${lx}%;width:${w}%;height:2px;margin-top:-1px;background:linear-gradient(90deg, transparent, hsla(${hue},100%,50%,${rungOp}), transparent);animation:glowPulse ${3 + (i%5)*0.5}s ease-in-out infinite;animation-delay:${(i*0.1)%2}s;"></div>`;
     }
   }
+
+  dnaEl.innerHTML = html;
 }
