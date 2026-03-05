@@ -1,10 +1,9 @@
 /**
- * DNA RADIO // WHISPER COLLEGE
- * Three.js DNA Helix Scene — 1024 Rungs
- * Waveform bar rungs, health-gradient colors, floating particles,
- * data annotations, thick glowing strands, bloom
- * Tuned for Intel Iris Xe integrated GPU
- * Reference: ADVANCEDdnaRadioDesign.jpg
+ * DNA RADIO // WHISPER COLLEGE — v13
+ * Three.js DNA Helix Scene — Song-only, flipped orientation
+ * Current track is ALWAYS the TOP rung. Queue descends below.
+ * Thinner strands, wider rung spacing, audio visualizer on active rung.
+ * Tuned for Intel Iris Xe integrated GPU.
  */
 
 import * as THREE from 'three';
@@ -15,46 +14,42 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 const CFG = {
-  helixRadius: 2.5,
-  totalRungs: 1024,
-  rungSpacing: 0.35,
-  rotationPerUnit: 0.25,
-  visibleRungs: 36,
-  rotationSpeed: (Math.PI * 2) / 120,
-  strandThickness: 0.18,       // thicker strands
-  rungWidth: 0.08,
-  rungDepth: 0.14,
-  waveformBars: 14,            // bars per rung waveform
-  particleCount: 180,          // floating particles (tuned for Intel Iris Xe)
-  bloomStrength: 1.6,
-  bloomRadius: 0.5,
-  bloomThreshold: 0.15,
+  helixRadius: 1.5,              // slimmer helix (was 2.5)
+  rungSpacing: 0.7,              // more spread (was 0.35)
+  rotationPerUnit: 0.22,         // slightly tighter twist
+  visibleRungs: 20,              // how many rungs visible at once
+  rotationSpeed: (Math.PI * 2) / 150,  // gentle rotation
+  strandThickness: 0.06,         // much thinner strands (was 0.18)
+  rungWidth: 0.05,
+  rungDepth: 0.10,
+  waveformBars: 16,              // bars per rung waveform
+  activeWaveformBars: 24,        // more bars for the active/visualizer rung
+  particleCount: 120,            // tuned for Intel Iris Xe
+  bloomStrength: 1.0,            // dialed back for sharpness (was 1.6)
+  bloomRadius: 0.3,              // tighter bloom
+  bloomThreshold: 0.25,          // higher threshold = less bloom bleed
+  glowTubeRadius: 0.25,          // single subtle glow tube (was 0.55 + 0.85)
+  nodeRadius: 0.10,              // smaller junction nodes (was strandThickness * 2)
 };
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let scene, camera, renderer, labelRenderer, composer;
 let helixGroup;
 
-let songRungGroups = [];       // Group[] for song rung bar clusters (clickable)
-let songRungHitMeshes = [];    // invisible hit-test cylinders for raycasting
-let songRungGlows = [];        // Mesh[] glow overlay per song rung
-let songNodeSpheres = [];      // Mesh[] node spheres at strand junction
-let emptyRungInstanced = null;
-let emptyNodeInstanced = null;
+let songRungGroups = [];
+let songRungHitMeshes = [];
+let songRungGlows = [];
+let songNodeSpheres = [];
 
-let rungLabels = [];           // CSS2DObject[] for song labels
-let dataAnnotations = [];      // CSS2DObject[] for floating data annotations
+let rungLabels = [];
+let dataAnnotations = [];
 
-// Waveform bar refs for animation
-let songWaveformBars = [];     // Array of { bars: Mesh[], baseHeights: number[] } per song rung
+let songWaveformBars = [];
 
-// Particle system
 let particleSystem = null;
 let particlePositions = null;
 let particleVelocities = null;
-let particleOpacities = null;
 
-// Precomputed strand points
 let strandPts1 = [];
 let strandPts2 = [];
 
@@ -85,17 +80,16 @@ export function initDNAHelix(state, callbacks) {
 
   scene = new THREE.Scene();
 
-  camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 800);
-  const camY = _songRegionY();
-  camera.position.set(0, camY, 12);
-  camera.lookAt(0, camY, 0);
+  camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 500);
+  camera.position.set(0, 2, 9);
+  camera.lookAt(0, 0, 0);
 
   const canvas = document.getElementById('helix-canvas');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setSize(w, h);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // cap for integrated GPUs
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.5;
+  renderer.toneMappingExposure = 1.3;
   renderer.setClearColor(0x000000, 0);
 
   labelRenderer = new CSS2DRenderer();
@@ -108,7 +102,7 @@ export function initDNAHelix(state, callbacks) {
   css2dLayer.innerHTML = '';
   css2dLayer.appendChild(labelRenderer.domElement);
 
-  // Post-processing — dramatic bloom
+  // Post-processing — sharper bloom
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(
@@ -119,23 +113,23 @@ export function initDNAHelix(state, callbacks) {
   );
   composer.addPass(bloom);
 
-  // Lighting — multiple points for depth
-  scene.add(new THREE.AmbientLight(0x0a1a2a, 1.8));
+  // Lighting — crisp and directional
+  scene.add(new THREE.AmbientLight(0x081828, 2.0));
 
-  const mainLight = new THREE.PointLight(0x00e5ff, 4, 60);
-  mainLight.position.set(0, camY, 10);
+  const mainLight = new THREE.PointLight(0x00e5ff, 3.5, 50);
+  mainLight.position.set(0, 5, 8);
   scene.add(mainLight);
 
-  const backLight = new THREE.PointLight(0x0088aa, 2, 40);
-  backLight.position.set(0, camY, -8);
+  const backLight = new THREE.PointLight(0x005577, 1.5, 35);
+  backLight.position.set(0, 0, -6);
   scene.add(backLight);
 
-  const topLight = new THREE.PointLight(0x00e5ff, 1.5, 35);
-  topLight.position.set(0, camY + 15, 5);
+  const topLight = new THREE.PointLight(0x00ccff, 2.0, 30);
+  topLight.position.set(0, 15, 4);
   scene.add(topLight);
 
-  const bottomLight = new THREE.PointLight(0xff2200, 1.2, 30);
-  bottomLight.position.set(0, camY - 20, 5);
+  const bottomLight = new THREE.PointLight(0xff2200, 0.8, 25);
+  bottomLight.position.set(0, -20, 3);
   scene.add(bottomLight);
 
   helixGroup = new THREE.Group();
@@ -143,7 +137,8 @@ export function initDNAHelix(state, callbacks) {
 
   buildHelixMeshes();
 
-  scrollTarget = _defaultScrollTarget();
+  // Start scrolled so active track (index 0 visually = top) is visible
+  scrollTarget = _scrollForActiveTrack(appState.currentIndex);
   scrollOffset = scrollTarget;
 
   container.addEventListener('wheel', onWheel, { passive: false });
@@ -159,161 +154,127 @@ export function initDNAHelix(state, callbacks) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function rungY(idx) { return idx * CFG.rungSpacing; }
-
-function songRungIndex(songIdx) {
-  return (CFG.totalRungs - appState.queue.length) + songIdx;
+// Rung Y position: current track at top (Y=0), queue descends into negative Y
+function rungY(visualIdx) {
+  return -visualIdx * CFG.rungSpacing;
 }
 
-function firstSongRung() {
-  return CFG.totalRungs - appState.queue.length;
+// Convert queue index to visual index:
+// Visual index 0 = current track (top), then subsequent tracks below
+function queueToVisual(queueIdx) {
+  const current = appState.currentIndex;
+  const len = appState.queue.length;
+  // Wrap around: current track is visual 0, next is visual 1, etc.
+  return ((queueIdx - current) + len) % len;
 }
 
-function _songRegionY() {
-  return 5;
+// Convert visual index back to queue index
+function visualToQueue(visualIdx) {
+  const current = appState.currentIndex;
+  const len = appState.queue.length;
+  return (current + visualIdx) % len;
 }
 
-function _defaultScrollTarget() {
-  const fsr = firstSongRung();
-  return Math.max(0, fsr - Math.floor(CFG.visibleRungs / 3));
+function _scrollForActiveTrack() {
+  // Active track is always at visual index 0 (top), so scroll to show top
+  return -2; // slight offset so active track isn't clipped at the very top
 }
 
-function getStrandPoint1(idx) {
-  const angle = idx * CFG.rotationPerUnit;
+function getStrandPoint1(visualIdx) {
+  const angle = visualIdx * CFG.rotationPerUnit;
   return new THREE.Vector3(
     Math.cos(angle) * CFG.helixRadius,
-    rungY(idx),
+    rungY(visualIdx),
     Math.sin(angle) * CFG.helixRadius
   );
 }
 
-function getStrandPoint2(idx) {
-  const angle = idx * CFG.rotationPerUnit + Math.PI;
+function getStrandPoint2(visualIdx) {
+  const angle = visualIdx * CFG.rotationPerUnit + Math.PI;
   return new THREE.Vector3(
     Math.cos(angle) * CFG.helixRadius,
-    rungY(idx),
+    rungY(visualIdx),
     Math.sin(angle) * CFG.helixRadius
   );
 }
 
 // ── Health-based color gradient ───────────────────────────────────────────────
-function _getHealthColor(health) {
-  // Returns a THREE.Color based on health score
-  if (health >= 5) return new THREE.Color(0x00e5ff);   // bright cyan
-  if (health >= 0) return new THREE.Color(0x008899);    // neutral teal
-  if (health >= -5) return new THREE.Color(0xff8800);   // warning orange
-  if (health >= -10) return new THREE.Color(0xff4400);  // orange-red
-  return new THREE.Color(0xff0020);                      // deep red
-}
-
-function _getHealthColorLerped(health) {
-  const c = new THREE.Color();
-  if (health >= 5) {
-    c.set(0x00e5ff);
-  } else if (health >= 0) {
-    const t = health / 5;
-    c.lerpColors(new THREE.Color(0x008899), new THREE.Color(0x00e5ff), t);
-  } else if (health >= -5) {
-    const t = (health + 5) / 5;
-    c.lerpColors(new THREE.Color(0xff4400), new THREE.Color(0x008899), t);
-  } else {
-    const t = Math.max(0, (health + 15) / 10);
-    c.lerpColors(new THREE.Color(0xff0020), new THREE.Color(0xff4400), t);
-  }
-  return c;
-}
-
 function _getRungColors(health, isActive) {
-  if (isActive) return { color: 0x00e5ff, emissive: 0x00bbdd, emissiveInt: 5 };
-  if (health >= 10) return { color: 0xffd700, emissive: 0xcc9900, emissiveInt: 3.5 };
-  if (health <= -10) return { color: 0xff0040, emissive: 0x880020, emissiveInt: 3 };
-  if (health > 0) return { color: 0x00ccee, emissive: 0x006688, emissiveInt: 1.2 + health * 0.2 };
+  if (isActive) return { color: 0x00e5ff, emissive: 0x00bbdd, emissiveInt: 4.5 };
+  if (health >= 10) return { color: 0xffd700, emissive: 0xcc9900, emissiveInt: 3.0 };
+  if (health <= -10) return { color: 0xff0040, emissive: 0x880020, emissiveInt: 2.5 };
+  if (health > 0) return { color: 0x00ccee, emissive: 0x006688, emissiveInt: 1.0 + health * 0.15 };
   if (health < 0) {
-    const lerpFactor = Math.min(1, Math.abs(health) / 10);
-    const c = new THREE.Color(0x008899).lerp(new THREE.Color(0xff4400), lerpFactor);
-    const e = new THREE.Color(0x002233).lerp(new THREE.Color(0x661100), lerpFactor);
-    return { color: c.getHex(), emissive: e.getHex(), emissiveInt: 0.6 + lerpFactor * 2.0 };
+    const t = Math.min(1, Math.abs(health) / 10);
+    const c = new THREE.Color(0x008899).lerp(new THREE.Color(0xff4400), t);
+    const e = new THREE.Color(0x002233).lerp(new THREE.Color(0x661100), t);
+    return { color: c.getHex(), emissive: e.getHex(), emissiveInt: 0.5 + t * 1.8 };
   }
-  return { color: 0x00aacc, emissive: 0x004455, emissiveInt: 1.0 };
+  return { color: 0x00aacc, emissive: 0x004455, emissiveInt: 0.8 };
 }
 
 // ── Build helix ───────────────────────────────────────────────────────────────
 function buildHelixMeshes() {
   const queue = appState.queue;
   const qLen = queue.length;
-  const N = CFG.totalRungs;
-  const fsr = firstSongRung();
 
-  // Precompute all strand points
-  strandPts1 = new Array(N);
-  strandPts2 = new Array(N);
-  for (let i = 0; i < N; i++) {
-    strandPts1[i] = getStrandPoint1(i);
-    strandPts2[i] = getStrandPoint2(i);
+  // Precompute strand points for all song rungs (in visual order)
+  strandPts1 = new Array(qLen);
+  strandPts2 = new Array(qLen);
+  for (let v = 0; v < qLen; v++) {
+    strandPts1[v] = getStrandPoint1(v);
+    strandPts2[v] = getStrandPoint2(v);
   }
 
-  // ── STRANDS — thick glowing tubes ──────────────────────────────────────
+  // ── STRANDS — thin, sharp tubes ──────────────────────────────────────
   const s1pts = [], s2pts = [];
-  for (let i = 0; i < N; i += 2) {
-    s1pts.push(strandPts1[i].clone());
-    s2pts.push(strandPts2[i].clone());
+  for (let v = 0; v < qLen; v += 2) {
+    s1pts.push(strandPts1[v].clone());
+    s2pts.push(strandPts2[v].clone());
   }
-  s1pts.push(strandPts1[N - 1].clone());
-  s2pts.push(strandPts2[N - 1].clone());
+  if (qLen % 2 === 0) {
+    s1pts.push(strandPts1[qLen - 1].clone());
+    s2pts.push(strandPts2[qLen - 1].clone());
+  }
 
   const curve1 = new THREE.CatmullRomCurve3(s1pts);
   const curve2 = new THREE.CatmullRomCurve3(s2pts);
-  const tubeSeg = Math.floor(N / 2) * 3;
+  const tubeSeg = Math.max(s1pts.length * 4, 80);
 
-  // Main strand material — thicker, bright, emissive
+  // Main strand — thin and precise
   const strandMat = new THREE.MeshStandardMaterial({
-    color: 0x00e5ff,
-    emissive: 0x007799,
-    emissiveIntensity: 3.0,
-    metalness: 0.7,
-    roughness: 0.1,
+    color: 0x00d4ee,
+    emissive: 0x006699,
+    emissiveIntensity: 2.5,
+    metalness: 0.8,
+    roughness: 0.05,
     transparent: true,
-    opacity: 0.95,
+    opacity: 0.9,
   });
 
   helixGroup.add(new THREE.Mesh(
-    new THREE.TubeGeometry(curve1, tubeSeg, CFG.strandThickness, 12, false), strandMat
+    new THREE.TubeGeometry(curve1, tubeSeg, CFG.strandThickness, 8, false), strandMat
   ));
   helixGroup.add(new THREE.Mesh(
-    new THREE.TubeGeometry(curve2, tubeSeg, CFG.strandThickness, 12, false), strandMat.clone()
+    new THREE.TubeGeometry(curve2, tubeSeg, CFG.strandThickness, 8, false), strandMat.clone()
   ));
 
-  // Glow overlay tubes — inner glow (brighter)
-  const glowMat1 = new THREE.MeshBasicMaterial({
-    color: 0x00ccff,
+  // Single subtle glow tube (not the massive double-glow from before)
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: 0x00aadd,
     transparent: true,
-    opacity: 0.25,
+    opacity: 0.10,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
   helixGroup.add(new THREE.Mesh(
-    new THREE.TubeGeometry(curve1, tubeSeg, 0.55, 12, false), glowMat1
+    new THREE.TubeGeometry(curve1, Math.floor(tubeSeg * 0.6), CFG.glowTubeRadius, 6, false), glowMat
   ));
   helixGroup.add(new THREE.Mesh(
-    new THREE.TubeGeometry(curve2, tubeSeg, 0.55, 12, false), glowMat1.clone()
+    new THREE.TubeGeometry(curve2, Math.floor(tubeSeg * 0.6), CFG.glowTubeRadius, 6, false), glowMat.clone()
   ));
 
-  // Outer atmospheric glow — wide but fewer segments for perf
-  const glowMat2 = new THREE.MeshBasicMaterial({
-    color: 0x0088cc,
-    transparent: true,
-    opacity: 0.07,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  helixGroup.add(new THREE.Mesh(
-    new THREE.TubeGeometry(curve1, Math.floor(tubeSeg * 0.5), 0.85, 6, false), glowMat2
-  ));
-  helixGroup.add(new THREE.Mesh(
-    new THREE.TubeGeometry(curve2, Math.floor(tubeSeg * 0.5), 0.85, 6, false), glowMat2.clone()
-  ));
-
-  // ── EMPTY RUNGS — InstancedMesh ────────────────────────────────────────
+  // ── SONG RUNGS — waveform bar clusters ─────────────────────────────
   songRungGroups = [];
   songRungHitMeshes = [];
   songRungGlows = [];
@@ -322,82 +283,33 @@ function buildHelixMeshes() {
   dataAnnotations = [];
   songWaveformBars = [];
 
-  const emptyCount = fsr;
+  const barGeom = new THREE.BoxGeometry(1, 1, 1);
 
-  if (emptyCount > 0) {
-    const emptyRungGeom = new THREE.CylinderGeometry(1, 1, 1, 6, 1);
-    const emptyRungMat = new THREE.MeshStandardMaterial({
-      color: 0x002838,
-      emissive: 0x001118,
-      emissiveIntensity: 0.3,
-      metalness: 0.5,
-      roughness: 0.3,
-      transparent: true,
-      opacity: 0.4,
-    });
-    emptyRungInstanced = new THREE.InstancedMesh(emptyRungGeom, emptyRungMat, emptyCount);
-    emptyRungInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    const emptyNodeGeom = new THREE.SphereGeometry(CFG.strandThickness * 1.6, 6, 6);
-    const emptyNodeMat = new THREE.MeshStandardMaterial({
-      color: 0x003344,
-      emissive: 0x001122,
-      emissiveIntensity: 0.3,
-      metalness: 0.4,
-      roughness: 0.2,
-      transparent: true,
-      opacity: 0.5,
-    });
-    emptyNodeInstanced = new THREE.InstancedMesh(emptyNodeGeom, emptyNodeMat, emptyCount * 2);
-    emptyNodeInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    for (let i = 0; i < emptyCount; i++) {
-      const p1 = strandPts1[i];
-      const p2 = strandPts2[i];
-      emptyRungInstanced.setMatrixAt(i, _rungMatrix(p1, p2, CFG.rungWidth * 0.6));
-
-      const nodeQ = new THREE.Quaternion();
-      const nodeS = new THREE.Vector3(1, 1, 1);
-      emptyNodeInstanced.setMatrixAt(i * 2, new THREE.Matrix4().compose(p1, nodeQ, nodeS));
-      emptyNodeInstanced.setMatrixAt(i * 2 + 1, new THREE.Matrix4().compose(p2, nodeQ, nodeS));
-    }
-
-    emptyRungInstanced.instanceMatrix.needsUpdate = true;
-    emptyNodeInstanced.instanceMatrix.needsUpdate = true;
-    helixGroup.add(emptyRungInstanced);
-    helixGroup.add(emptyNodeInstanced);
-  }
-
-  // ── SONG RUNGS — waveform bar clusters ─────────────────────────────────
-  const barGeom = new THREE.BoxGeometry(1, 1, 1);  // unit box, scaled per bar
-
-  for (let s = 0; s < qLen; s++) {
-    const ri = fsr + s;
-    const p1 = strandPts1[ri];
-    const p2 = strandPts2[ri];
-    const song = queue[s];
+  for (let v = 0; v < qLen; v++) {
+    const qIdx = visualToQueue(v);
+    const song = queue[qIdx];
     const health = song.health || 0;
-    const isActive = s === appState.currentIndex;
+    const isActive = v === 0; // visual index 0 = current track = top rung
     const col = _getRungColors(health, isActive);
 
-    // Direction from p1 to p2
+    const p1 = strandPts1[v];
+    const p2 = strandPts2[v];
+
     const dir = new THREE.Vector3().subVectors(p2, p1);
     const length = dir.length();
     const dirNorm = dir.clone().normalize();
     const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
 
-    // Rotation to align bars along rung axis
     const up = new THREE.Vector3(0, 1, 0);
     const rungQuat = new THREE.Quaternion().setFromUnitVectors(up, dirNorm);
 
-    // Create group for the waveform bars
     const rungGroup = new THREE.Group();
     rungGroup.position.copy(mid);
     rungGroup.quaternion.copy(rungQuat);
 
-    const numBars = CFG.waveformBars;
+    const numBars = isActive ? CFG.activeWaveformBars : CFG.waveformBars;
     const barSpacing = length / (numBars + 1);
-    const barWidth = barSpacing * 0.65;
+    const barWidth = barSpacing * 0.55;
     const barDepth = CFG.rungDepth;
     const bars = [];
     const baseHeights = [];
@@ -406,65 +318,59 @@ function buildHelixMeshes() {
       color: col.color,
       emissive: col.emissive,
       emissiveIntensity: col.emissiveInt,
-      metalness: 0.5,
-      roughness: 0.15,
+      metalness: 0.6,
+      roughness: 0.1,
     });
 
+    // Front bars
     for (let b = 0; b < numBars; b++) {
       const barMesh = new THREE.Mesh(barGeom, barMat.clone());
-
-      // Position along the rung (in local space, Y = along rung direction)
       const localY = -length / 2 + barSpacing * (b + 1);
+      const seed = v * 100 + b;
+      const randH = isActive
+        ? 0.1 + _seededRandom(seed) * 0.35
+        : 0.05 + _seededRandom(seed) * 0.18;
 
-      // Random height for non-active, slightly varied
-      const seed = ri * 100 + b;
-      const randH = 0.08 + _seededRandom(seed) * 0.25;
-      const barHeight = isActive ? (0.15 + _seededRandom(seed) * 0.3) : randH;
-
-      barMesh.scale.set(barWidth, 1, barDepth);
-      // The box is 1 unit tall, so scale Y = barHeight
-      // Place it so bottom sits at the rung plane, bars extend "outward" in local X (perpendicular)
-      // Actually we want bars to go perpendicular to the rung direction — that's local X or local Z.
-      // Let's have them extend in local Z direction (which becomes perpendicular to the rung in world space)
-      barMesh.scale.set(barWidth, barDepth, barHeight);
-      barMesh.position.set(0, localY, barHeight / 2);
+      barMesh.scale.set(barWidth, barDepth, randH);
+      barMesh.position.set(0, localY, randH / 2);
 
       rungGroup.add(barMesh);
       bars.push(barMesh);
       baseHeights.push(randH);
     }
 
-    // Also add bars mirrored on the other side for symmetry
+    // Mirror bars (back side)
     for (let b = 0; b < numBars; b++) {
       const barMesh = new THREE.Mesh(barGeom, barMat.clone());
       const localY = -length / 2 + barSpacing * (b + 1);
-      const seed = ri * 100 + b + 50;
-      const randH = 0.08 + _seededRandom(seed) * 0.25;
-      const barHeight = isActive ? (0.15 + _seededRandom(seed) * 0.3) : randH;
+      const seed = v * 100 + b + 50;
+      const randH = isActive
+        ? 0.1 + _seededRandom(seed) * 0.35
+        : 0.05 + _seededRandom(seed) * 0.18;
 
-      barMesh.scale.set(barWidth, barDepth, barHeight);
-      barMesh.position.set(0, localY, -barHeight / 2);
+      barMesh.scale.set(barWidth, barDepth, randH);
+      barMesh.position.set(0, localY, -randH / 2);
 
       rungGroup.add(barMesh);
       bars.push(barMesh);
       baseHeights.push(randH);
     }
 
-    rungGroup.userData = { songIndex: s, songId: song.id, rungIndex: ri };
+    rungGroup.userData = { songIndex: qIdx, songId: song.id, visualIndex: v };
     helixGroup.add(rungGroup);
     songRungGroups.push(rungGroup);
     songWaveformBars.push({ bars, baseHeights, numBars });
 
-    // Invisible hit-test cylinder for raycasting
+    // Invisible hit mesh
     const hitMat = new THREE.MeshBasicMaterial({ visible: false });
-    const hitMesh = _createRungMesh(p1, p2, CFG.rungWidth * 2.5, hitMat);
-    hitMesh.userData = { songIndex: s, songId: song.id, rungIndex: ri };
+    const hitMesh = _createRungMesh(p1, p2, CFG.rungWidth * 3, hitMat);
+    hitMesh.userData = { songIndex: qIdx, songId: song.id, visualIndex: v };
     helixGroup.add(hitMesh);
     songRungHitMeshes.push(hitMesh);
 
-    // Glow overlay for rung
-    const glowColor = isActive ? 0x00e5ff : (health >= 10 ? 0xffd700 : (health <= -10 ? 0xff0040 : 0x00ccff));
-    const glowOpacity = isActive ? 0.4 : (health >= 10 ? 0.25 : 0.06);
+    // Glow overlay
+    const glowColor = isActive ? 0x00e5ff : (health >= 10 ? 0xffd700 : (health <= -10 ? 0xff0040 : 0x00bbdd));
+    const glowOpacity = isActive ? 0.30 : (health >= 10 ? 0.18 : 0.03);
     const rungGlowMat = new THREE.MeshBasicMaterial({
       color: glowColor,
       transparent: true,
@@ -472,18 +378,18 @@ function buildHelixMeshes() {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    const rungGlowMesh = _createRungMesh(p1, p2, CFG.rungWidth * 4, rungGlowMat);
+    const rungGlowMesh = _createRungMesh(p1, p2, CFG.rungWidth * 3.5, rungGlowMat);
     helixGroup.add(rungGlowMesh);
     songRungGlows.push(rungGlowMesh);
 
-    // Node spheres at strand junctions
-    const nodeGeom = new THREE.SphereGeometry(CFG.strandThickness * 2, 10, 10);
+    // Node spheres — smaller, sharper
+    const nodeGeom = new THREE.SphereGeometry(CFG.nodeRadius, 8, 8);
     const nodeMat = new THREE.MeshStandardMaterial({
       color: col.color,
       emissive: col.emissive,
-      emissiveIntensity: col.emissiveInt * 1.3,
-      metalness: 0.5,
-      roughness: 0.15,
+      emissiveIntensity: col.emissiveInt * 1.2,
+      metalness: 0.6,
+      roughness: 0.1,
     });
     const node1 = new THREE.Mesh(nodeGeom, nodeMat);
     node1.position.copy(p1);
@@ -492,7 +398,7 @@ function buildHelixMeshes() {
     helixGroup.add(node1, node2);
     songNodeSpheres.push(node1, node2);
 
-    // ── Label — positioned beside the rung ──
+    // Label
     const labelEl = document.createElement('div');
     labelEl.className = 'helix-label' +
       (isActive ? ' active' : '') +
@@ -505,8 +411,8 @@ function buildHelixMeshes() {
     helixGroup.add(label);
     rungLabels.push(label);
 
-    // ── Floating data annotations ──
-    _createDataAnnotations(s, song, health, isActive, mid, p1, p2);
+    // Data annotations — only on active, immortal, rejected, or every 10th
+    _createDataAnnotations(v, qIdx, song, health, isActive, mid, p1, p2);
   }
 
   // ── PARTICLE SYSTEM ────────────────────────────────────────────────────
@@ -514,145 +420,145 @@ function buildHelixMeshes() {
 }
 
 // ── Data Annotations ──────────────────────────────────────────────────────────
-function _createDataAnnotations(songIdx, song, health, isActive, mid, p1, p2) {
-  // Offset to the right of the helix
+function _createDataAnnotations(visualIdx, queueIdx, song, health, isActive, mid, p1, p2) {
   const offsetDir = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5).normalize();
-  const rightOffset = offsetDir.multiplyScalar(3.5);
+  const rightOffset = offsetDir.multiplyScalar(2.8);
 
-  // Only annotate certain rungs to avoid clutter
-  const shouldAnnotate = isActive || health >= 10 || health <= -5 || songIdx === 0 || songIdx % 8 === 0;
+  const shouldAnnotate = isActive || health >= 10 || health <= -5 || visualIdx % 10 === 0;
   if (!shouldAnnotate) return;
 
   const annoEl = document.createElement('div');
   annoEl.className = 'helix-annotation';
   annoEl.style.cssText = `
     font-family: 'Courier New', monospace;
-    font-size: 9px;
-    color: ${health <= -5 ? '#ff4444' : '#00cccc'};
-    opacity: 0.7;
+    font-size: 8px;
+    color: ${health <= -5 ? '#ff4444' : '#00bbcc'};
+    opacity: 0.6;
     white-space: nowrap;
     letter-spacing: 1px;
-    text-shadow: 0 0 6px ${health <= -5 ? '#ff000088' : '#00ccff88'};
+    text-shadow: 0 0 4px ${health <= -5 ? '#ff000066' : '#00ccff66'};
     pointer-events: none;
   `;
 
   let text = '';
   if (isActive) {
-    text = `TRACK_${String(songIdx + 1).padStart(2, '0')}: PULSE_ORIGIN`;
+    text = `TRACK_${String(queueIdx + 1).padStart(2, '0')}: PULSE_ORIGIN`;
   } else if (health >= 10) {
     text = 'IMMORTAL_STATE: TRUE';
   } else if (health <= -10) {
     text = 'FRAGMENTED_DATA';
   } else if (health <= -5) {
     text = 'ERROR_DECAY_DETECTED';
-  } else if (songIdx === 0) {
-    text = 'AUDIO ANALYZER';
   } else {
-    text = `SEQ_${String(songIdx).padStart(3, '0')}_ACTIVE`;
+    text = `SEQ_${String(queueIdx).padStart(3, '0')}_ACTIVE`;
   }
   annoEl.textContent = text;
 
   const annoLabel = new CSS2DObject(annoEl);
   annoLabel.position.set(mid.x + rightOffset.x, mid.y, mid.z + rightOffset.z);
   helixGroup.add(annoLabel);
-  dataAnnotations.push({ label: annoLabel, songIdx, health, isActive });
+  dataAnnotations.push({ label: annoLabel, visualIdx, queueIdx, health, isActive });
 
-  // Extra waveform data annotation for active track
+  // Extra waveform data for active
   if (isActive) {
     const extraEl = document.createElement('div');
     extraEl.className = 'helix-annotation';
     extraEl.style.cssText = `
       font-family: 'Courier New', monospace;
-      font-size: 8px;
-      color: #00aacc;
-      opacity: 0.55;
+      font-size: 7px;
+      color: #009aaa;
+      opacity: 0.45;
       white-space: nowrap;
       letter-spacing: 1px;
-      text-shadow: 0 0 4px #00ccff66;
+      text-shadow: 0 0 3px #00ccff44;
       pointer-events: none;
     `;
     extraEl.textContent = 'WAVEFORM_DATA: 44.1kHz / 16-BIT / STEREO';
     const extraLabel = new CSS2DObject(extraEl);
-    extraLabel.position.set(mid.x + rightOffset.x, mid.y - 0.25, mid.z + rightOffset.z);
+    extraLabel.position.set(mid.x + rightOffset.x, mid.y - 0.2, mid.z + rightOffset.z);
     helixGroup.add(extraLabel);
-    dataAnnotations.push({ label: extraLabel, songIdx, health, isActive });
+    dataAnnotations.push({ label: extraLabel, visualIdx, queueIdx, health, isActive });
+
+    // Audio analyzer label
+    const analyzerEl = document.createElement('div');
+    analyzerEl.className = 'helix-annotation';
+    analyzerEl.style.cssText = `
+      font-family: 'Courier New', monospace;
+      font-size: 7px;
+      color: #00ddff;
+      opacity: 0.5;
+      white-space: nowrap;
+      letter-spacing: 1.5px;
+      text-shadow: 0 0 5px #00ccff66;
+      pointer-events: none;
+    `;
+    analyzerEl.textContent = 'AUDIO ANALYZER';
+    const analyzerLabel = new CSS2DObject(analyzerEl);
+    analyzerLabel.position.set(mid.x + rightOffset.x, mid.y + 0.2, mid.z + rightOffset.z);
+    helixGroup.add(analyzerLabel);
+    dataAnnotations.push({ label: analyzerLabel, visualIdx, queueIdx, health, isActive });
   }
 }
 
 // ── Particle system ───────────────────────────────────────────────────────────
 function _buildParticleSystem() {
   const count = CFG.particleCount;
-  const N = CFG.totalRungs;
+  const qLen = appState.queue.length;
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const sizes = new Float32Array(count);
   particleVelocities = new Float32Array(count * 3);
-  particleOpacities = new Float32Array(count);
-
-  const fsr = firstSongRung();
 
   for (let i = 0; i < count; i++) {
-    // Distribute particles along the helix strands
-    const rungIdx = Math.floor(Math.random() * N);
+    const vIdx = Math.floor(Math.random() * qLen);
     const strand = Math.random() > 0.5 ? 1 : 2;
-    const angle = rungIdx * CFG.rotationPerUnit + (strand === 2 ? Math.PI : 0);
-    const r = CFG.helixRadius + (Math.random() - 0.5) * 1.5;
+    const angle = vIdx * CFG.rotationPerUnit + (strand === 2 ? Math.PI : 0);
+    const r = CFG.helixRadius + (Math.random() - 0.5) * 1.0;
 
-    positions[i * 3] = Math.cos(angle) * r + (Math.random() - 0.5) * 0.5;
-    positions[i * 3 + 1] = rungY(rungIdx) + (Math.random() - 0.5) * 0.3;
-    positions[i * 3 + 2] = Math.sin(angle) * r + (Math.random() - 0.5) * 0.5;
+    positions[i * 3] = Math.cos(angle) * r + (Math.random() - 0.5) * 0.3;
+    positions[i * 3 + 1] = rungY(vIdx) + (Math.random() - 0.5) * 0.3;
+    positions[i * 3 + 2] = Math.sin(angle) * r + (Math.random() - 0.5) * 0.3;
 
-    // Particles near song region are brighter cyan, others dimmer
-    const isSongRegion = rungIdx >= fsr;
-    const nearActive = isSongRegion && Math.abs(rungIdx - (fsr + (appState.currentIndex || 0))) < 5;
-
+    // Particles near active rung (top) are brighter
+    const nearActive = vIdx < 5;
     if (nearActive) {
       colors[i * 3] = 0;
-      colors[i * 3 + 1] = 0.9;
+      colors[i * 3 + 1] = 0.85;
       colors[i * 3 + 2] = 1.0;
-      sizes[i] = 2.5 + Math.random() * 2;
-    } else if (isSongRegion) {
-      colors[i * 3] = 0;
-      colors[i * 3 + 1] = 0.6;
-      colors[i * 3 + 2] = 0.8;
-      sizes[i] = 1.5 + Math.random() * 1.5;
+      sizes[i] = 2.0 + Math.random() * 1.5;
     } else {
       colors[i * 3] = 0;
-      colors[i * 3 + 1] = 0.3;
-      colors[i * 3 + 2] = 0.5;
+      colors[i * 3 + 1] = 0.4;
+      colors[i * 3 + 2] = 0.6;
       sizes[i] = 0.8 + Math.random() * 1.0;
     }
 
-    // Gentle upward drift velocity
-    particleVelocities[i * 3] = (Math.random() - 0.5) * 0.1;
-    particleVelocities[i * 3 + 1] = 0.02 + Math.random() * 0.08;
-    particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 0.1;
-    particleOpacities[i] = 0.3 + Math.random() * 0.7;
+    particleVelocities[i * 3] = (Math.random() - 0.5) * 0.08;
+    particleVelocities[i * 3 + 1] = -(0.01 + Math.random() * 0.05); // drift downward (queue direction)
+    particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 0.08;
   }
 
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
-  // Create a small round texture for particles
-  const canvas = document.createElement('canvas');
-  canvas.width = 32;
-  canvas.height = 32;
-  const ctx = canvas.getContext('2d');
-  const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.3, 'rgba(255,255,255,0.6)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = gradient;
+  // Round particle texture
+  const cnv = document.createElement('canvas');
+  cnv.width = 32; cnv.height = 32;
+  const ctx = cnv.getContext('2d');
+  const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.3, 'rgba(255,255,255,0.5)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 32, 32);
-  const particleTexture = new THREE.CanvasTexture(canvas);
 
   const material = new THREE.PointsMaterial({
-    size: 0.15,
-    map: particleTexture,
+    size: 0.12,
+    map: new THREE.CanvasTexture(cnv),
     transparent: true,
-    opacity: 0.7,
+    opacity: 0.6,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     vertexColors: true,
@@ -664,12 +570,12 @@ function _buildParticleSystem() {
   helixGroup.add(particleSystem);
 }
 
-// Create a cylinder mesh connecting two 3D points
+// ── Mesh helpers ──────────────────────────────────────────────────────────────
 function _createRungMesh(p1, p2, radius, material) {
   const dir = new THREE.Vector3().subVectors(p2, p1);
   const length = dir.length();
   const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
-  const geom = new THREE.CylinderGeometry(radius, radius, length, 8);
+  const geom = new THREE.CylinderGeometry(radius, radius, length, 6);
   const mesh = new THREE.Mesh(geom, material);
   mesh.position.copy(mid);
   const up = new THREE.Vector3(0, 1, 0);
@@ -677,19 +583,7 @@ function _createRungMesh(p1, p2, radius, material) {
   return mesh;
 }
 
-// Matrix for instanced rung
-function _rungMatrix(p1, p2, radius) {
-  const dir = new THREE.Vector3().subVectors(p2, p1);
-  const length = dir.length();
-  const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
-  const up = new THREE.Vector3(0, 1, 0);
-  const quat = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize());
-  const scale = new THREE.Vector3(radius, length, radius);
-  return new THREE.Matrix4().compose(mid, quat, scale);
-}
-
 function clearHelixMeshes() {
-  // Dispose song rung groups
   songRungGroups.forEach(g => {
     g.traverse(child => {
       if (child.isMesh) { child.geometry.dispose(); child.material.dispose(); }
@@ -704,29 +598,22 @@ function clearHelixMeshes() {
   songNodeSpheres.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
   songNodeSpheres = [];
 
-  if (emptyRungInstanced) { emptyRungInstanced.geometry.dispose(); emptyRungInstanced.material.dispose(); emptyRungInstanced = null; }
-  if (emptyNodeInstanced) { emptyNodeInstanced.geometry.dispose(); emptyNodeInstanced.material.dispose(); emptyNodeInstanced = null; }
-
-  // Remove labels
   rungLabels.forEach(l => {
     if (l.element && l.element.parentNode) l.element.parentNode.removeChild(l.element);
   });
   rungLabels = [];
 
-  // Remove data annotations
   dataAnnotations.forEach(a => {
     if (a.label.element && a.label.element.parentNode) a.label.element.parentNode.removeChild(a.label.element);
   });
   dataAnnotations = [];
 
-  // Remove particles
   if (particleSystem) {
     particleSystem.geometry.dispose();
     particleSystem.material.dispose();
     particleSystem = null;
     particlePositions = null;
     particleVelocities = null;
-    particleOpacities = null;
   }
 
   helixGroup.clear();
@@ -741,7 +628,7 @@ function loop(time) {
   lastTime = time;
 
   rotationAngle += CFG.rotationSpeed * delta;
-  activeRungPulse += delta * 3;
+  activeRungPulse += delta * 3.5;
 
   // Smooth scroll
   scrollOffset += (scrollTarget - scrollOffset) * 0.08;
@@ -751,96 +638,104 @@ function loop(time) {
   helixGroup.position.y = yOffset;
   helixGroup.rotation.y = rotationAngle;
 
-  // Pulse active rung glow
   const pulseVal = 0.5 + 0.5 * Math.sin(activeRungPulse);
   const fastPulse = time * 0.001;
+  const qLen = appState.queue.length;
 
-  // Visibility culling + active pulse + waveform animation
-  const fsr = firstSongRung();
-  songRungGroups.forEach((group, s) => {
-    const ri = fsr + s;
-    const localY = rungY(ri);
+  // Visibility culling + active waveform animation
+  songRungGroups.forEach((group, v) => {
+    const localY = rungY(v);
     const worldY = localY + yOffset;
-    const visible = worldY > -5 && worldY < 30;
+    const visible = worldY > -15 && worldY < 20;
 
     group.visible = visible;
-    if (songRungHitMeshes[s]) songRungHitMeshes[s].visible = visible;
-    if (songRungGlows[s]) songRungGlows[s].visible = visible;
+    if (songRungHitMeshes[v]) songRungHitMeshes[v].visible = visible;
+    if (songRungGlows[v]) songRungGlows[v].visible = visible;
 
-    const isActive = s === appState.currentIndex;
+    const isActive = v === 0;
 
-    if (visible && isActive && songWaveformBars[s]) {
-      // Animate waveform bars for active track
-      const wb = songWaveformBars[s];
+    if (visible && isActive && songWaveformBars[v]) {
+      // ── AUDIO VISUALIZER — animate waveform bars on active (top) rung ──
+      const wb = songWaveformBars[v];
       for (let b = 0; b < wb.bars.length; b++) {
         const bar = wb.bars[b];
         const base = wb.baseHeights[b];
-        // Sine wave animation with offset per bar
-        const anim = 0.15 + Math.abs(Math.sin(fastPulse * 3 + b * 0.7)) * 0.4;
-        const newH = base * 0.3 + anim;
         const isMirror = b >= wb.numBars;
+        const barIdx = isMirror ? b - wb.numBars : b;
+
+        // Multi-frequency visualization: bass on edges, treble in center
+        const centerDist = Math.abs(barIdx - wb.numBars / 2) / (wb.numBars / 2);
+        const bassFreq = 2.0 + centerDist * 1.5;
+        const trebleFreq = 4.0 - centerDist * 2.0;
+
+        const wave1 = Math.abs(Math.sin(fastPulse * bassFreq + barIdx * 0.5));
+        const wave2 = Math.abs(Math.sin(fastPulse * trebleFreq + barIdx * 0.9 + 1.2));
+        const wave3 = Math.abs(Math.sin(fastPulse * 1.5 + barIdx * 0.3));
+
+        const combined = wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2;
+        const newH = base * 0.2 + combined * 0.45;
+
         bar.scale.z = newH;
         bar.position.z = isMirror ? -newH / 2 : newH / 2;
       }
 
-      // Pulse emissive on active bars
-      const emInt = 4 + pulseVal * 3;
+      // Pulse emissive
+      const emInt = 3.5 + pulseVal * 2.5;
       wb.bars.forEach(bar => {
         bar.material.emissiveIntensity = emInt;
       });
     }
 
     // Pulse active glow
-    if (visible && isActive && songRungGlows[s]) {
-      songRungGlows[s].material.opacity = 0.3 + pulseVal * 0.25;
+    if (visible && isActive && songRungGlows[v]) {
+      songRungGlows[v].material.opacity = 0.2 + pulseVal * 0.2;
     }
 
     // Label visibility
-    if (rungLabels[s]) {
-      rungLabels[s].element.style.display = visible ? 'block' : 'none';
+    if (rungLabels[v]) {
+      rungLabels[v].element.style.display = visible ? 'block' : 'none';
     }
   });
 
   // Node sphere visibility
   songNodeSpheres.forEach((node, i) => {
-    const s = Math.floor(i / 2);
-    const ri = fsr + s;
-    const localY = rungY(ri);
+    const v = Math.floor(i / 2);
+    const localY = rungY(v);
     const worldY = localY + yOffset;
-    node.visible = worldY > -5 && worldY < 30;
+    node.visible = worldY > -15 && worldY < 20;
   });
 
-  // Data annotation visibility
+  // Annotation visibility
   dataAnnotations.forEach(a => {
-    const ri = fsr + a.songIdx;
-    const localY = rungY(ri);
+    const localY = rungY(a.visualIdx);
     const worldY = localY + yOffset;
-    const visible = worldY > -3 && worldY < 25;
+    const visible = worldY > -12 && worldY < 18;
     a.label.element.style.display = visible ? 'block' : 'none';
   });
 
   // Animate particles
   if (particleSystem && particlePositions && particleVelocities) {
-    const N = CFG.totalRungs;
     const pCount = CFG.particleCount;
+    const maxY = 2; // slightly above top rung
+    const minY = rungY(qLen - 1) - 1;
+
     for (let i = 0; i < pCount; i++) {
       particlePositions[i * 3] += particleVelocities[i * 3] * delta;
       particlePositions[i * 3 + 1] += particleVelocities[i * 3 + 1] * delta;
       particlePositions[i * 3 + 2] += particleVelocities[i * 3 + 2] * delta;
 
-      // Wrap particles that go too far vertically
-      const maxY = rungY(N - 1) + 2;
-      if (particlePositions[i * 3 + 1] > maxY) {
-        particlePositions[i * 3 + 1] = 0;
-      }
-      if (particlePositions[i * 3 + 1] < -2) {
+      // Wrap
+      if (particlePositions[i * 3 + 1] < minY) {
         particlePositions[i * 3 + 1] = maxY;
       }
+      if (particlePositions[i * 3 + 1] > maxY + 1) {
+        particlePositions[i * 3 + 1] = minY;
+      }
 
-      // Slight orbital motion
+      // Gentle orbital motion
       const px = particlePositions[i * 3];
       const pz = particlePositions[i * 3 + 2];
-      const angle = Math.atan2(pz, px) + delta * 0.15;
+      const angle = Math.atan2(pz, px) + delta * 0.12;
       const r = Math.sqrt(px * px + pz * pz);
       particlePositions[i * 3] = Math.cos(angle) * r;
       particlePositions[i * 3 + 2] = Math.sin(angle) * r;
@@ -855,8 +750,9 @@ function loop(time) {
 // ── Controls ──────────────────────────────────────────────────────────────────
 function onWheel(e) {
   e.preventDefault();
-  scrollTarget += e.deltaY * 0.004;
-  scrollTarget = Math.max(0, Math.min(scrollTarget, CFG.totalRungs - CFG.visibleRungs));
+  scrollTarget += e.deltaY * 0.006;
+  const maxScroll = appState.queue.length - CFG.visibleRungs;
+  scrollTarget = Math.max(-3, Math.min(scrollTarget, maxScroll));
 }
 
 function onHelixClick(e) {
@@ -869,7 +765,6 @@ function onHelixClick(e) {
   );
   raycaster.setFromCamera(mouse, camera);
 
-  // Raycast against invisible hit meshes
   const hits = raycaster.intersectObjects(songRungHitMeshes);
   if (hits.length > 0) {
     const idx = hits[0].object.userData.songIndex;
@@ -891,108 +786,50 @@ function onResize() {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 function setCurrentTrack(index) {
-  const queue = appState.queue;
-  const fsr = firstSongRung();
+  // Full rebuild — current track changes visual ordering (it's now on top)
+  clearHelixMeshes();
+  buildHelixMeshes();
 
-  songRungGroups.forEach((group, s) => {
-    const song = queue[s];
-    const health = song ? (song.health || 0) : 0;
-    const isActive = s === index;
-    const col = _getRungColors(health, isActive);
-
-    // Update waveform bar materials
-    if (songWaveformBars[s]) {
-      songWaveformBars[s].bars.forEach(bar => {
-        bar.material.color.setHex(col.color);
-        bar.material.emissive.setHex(col.emissive);
-        bar.material.emissiveIntensity = col.emissiveInt;
-      });
-    }
-
-    if (songRungGlows[s]) {
-      const glowColor = isActive ? 0x00e5ff : (health >= 10 ? 0xffd700 : (health <= -10 ? 0xff0040 : 0x00ccff));
-      const glowOpacity = isActive ? 0.4 : (health >= 10 ? 0.25 : 0.06);
-      songRungGlows[s].material.color.setHex(glowColor);
-      songRungGlows[s].material.opacity = glowOpacity;
-    }
-
-    // Update node sphere colors
-    if (songNodeSpheres[s * 2]) {
-      songNodeSpheres[s * 2].material.color.setHex(col.color);
-      songNodeSpheres[s * 2].material.emissive.setHex(col.emissive);
-    }
-    if (songNodeSpheres[s * 2 + 1]) {
-      songNodeSpheres[s * 2 + 1].material.color.setHex(col.color);
-      songNodeSpheres[s * 2 + 1].material.emissive.setHex(col.emissive);
-    }
-
-    if (rungLabels[s]) {
-      const el = rungLabels[s].element;
-      el.className = 'helix-label' +
-        (isActive ? ' active' : '') +
-        (health >= 10 ? ' immortal' : '') +
-        (health <= -10 ? ' rejected' : '');
-    }
-  });
-
-  // Rebuild data annotations (they depend on which track is active)
-  dataAnnotations.forEach(a => {
-    if (a.label.element && a.label.element.parentNode) a.label.element.parentNode.removeChild(a.label.element);
-    helixGroup.remove(a.label);
-  });
-  dataAnnotations = [];
-
-  for (let s = 0; s < queue.length; s++) {
-    const ri = fsr + s;
-    const p1 = strandPts1[ri];
-    const p2 = strandPts2[ri];
-    const song = queue[s];
-    const health = song.health || 0;
-    const isActive = s === index;
-    const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
-    _createDataAnnotations(s, song, health, isActive, mid, p1, p2);
-  }
-
-  // Scroll to show active track
-  const activeRung = fsr + index;
-  const midView = CFG.visibleRungs / 2;
-  scrollTarget = Math.max(0, Math.min(activeRung - midView, CFG.totalRungs - CFG.visibleRungs));
+  // Scroll back to top to show the new active track
+  scrollTarget = _scrollForActiveTrack();
 }
 
 function updateRungHealth(songId, health) {
   const queue = appState.queue;
-  const songIdx = queue.findIndex(s => s.id === songId);
-  if (songIdx === -1) return;
+  const queueIdx = queue.findIndex(s => s.id === songId);
+  if (queueIdx === -1) return;
 
-  const isActive = songIdx === appState.currentIndex;
+  // Find which visual index this corresponds to
+  const visualIdx = queueToVisual(queueIdx);
+  const isActive = visualIdx === 0;
   const col = _getRungColors(health, isActive);
 
-  // Update waveform bar materials
-  if (songWaveformBars[songIdx]) {
-    songWaveformBars[songIdx].bars.forEach(bar => {
+  // Update bar materials
+  if (songWaveformBars[visualIdx]) {
+    songWaveformBars[visualIdx].bars.forEach(bar => {
       bar.material.color.setHex(col.color);
       bar.material.emissive.setHex(col.emissive);
       bar.material.emissiveIntensity = col.emissiveInt;
     });
   }
 
-  if (songRungGlows[songIdx]) {
-    const glowColor = health >= 10 ? 0xffd700 : (health <= -10 ? 0xff0040 : 0x00ccff);
-    songRungGlows[songIdx].material.color.setHex(glowColor);
-    songRungGlows[songIdx].material.opacity = health >= 10 ? 0.25 : (health <= -10 ? 0.2 : 0.06);
+  if (songRungGlows[visualIdx]) {
+    const gc = health >= 10 ? 0xffd700 : (health <= -10 ? 0xff0040 : 0x00bbdd);
+    songRungGlows[visualIdx].material.color.setHex(gc);
+    songRungGlows[visualIdx].material.opacity = health >= 10 ? 0.18 : (health <= -10 ? 0.15 : 0.03);
   }
 
-  if (songNodeSpheres[songIdx * 2]) {
-    songNodeSpheres[songIdx * 2].material.color.setHex(col.color);
-    songNodeSpheres[songIdx * 2].material.emissive.setHex(col.emissive);
+  if (songNodeSpheres[visualIdx * 2]) {
+    songNodeSpheres[visualIdx * 2].material.color.setHex(col.color);
+    songNodeSpheres[visualIdx * 2].material.emissive.setHex(col.emissive);
   }
-  if (songNodeSpheres[songIdx * 2 + 1]) {
-    songNodeSpheres[songIdx * 2 + 1].material.color.setHex(col.color);
-    songNodeSpheres[songIdx * 2 + 1].material.emissive.setHex(col.emissive);
+  if (songNodeSpheres[visualIdx * 2 + 1]) {
+    songNodeSpheres[visualIdx * 2 + 1].material.color.setHex(col.color);
+    songNodeSpheres[visualIdx * 2 + 1].material.emissive.setHex(col.emissive);
   }
 
-  if (rungLabels[songIdx]) {
-    const el = rungLabels[songIdx].element;
+  if (rungLabels[visualIdx]) {
+    const el = rungLabels[visualIdx].element;
     el.className = 'helix-label' +
       (isActive ? ' active' : '') +
       (health >= 10 ? ' immortal' : '') +
