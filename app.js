@@ -24,7 +24,7 @@ try {
 }
 
 try {
-  const spotMod = await import('./spotify.js?v=9');
+  const spotMod = await import('./spotify.js?v=10');
   audioController = spotMod.audioController;
   spotifyLogin = spotMod.spotifyLogin;
   spotifyLogout = spotMod.spotifyLogout;
@@ -622,8 +622,9 @@ async function initMainInterface() {
   // Set initial volume to 65%
   audioController.setVolume(65);
 
-  // Cue first track but do NOT auto-play (browser blocks autoplay before user gesture)
-  setCurrentTrack(0, false);
+  // Auto-play first track — we're past the auth gate + beacon hold,
+  // so the user has already interacted with the page (satisfies autoplay policy)
+  setCurrentTrack(0, true);
 
   // Fade in
   setTimeout(() => { mainEl.style.opacity = '1'; }, 50);
@@ -784,12 +785,13 @@ function updateMuteButton() {
 
 function playNext() {
   const next = (state.currentIndex + 1) % state.queue.length;
-  setCurrentTrack(next, state.isPlaying);
+  // Always autoPlay when advancing — if we got here, user was listening
+  setCurrentTrack(next, true);
 }
 
 function playPrev() {
   const prev = (state.currentIndex - 1 + state.queue.length) % state.queue.length;
-  setCurrentTrack(prev, state.isPlaying);
+  setCurrentTrack(prev, true);
 }
 
 // ====================================================
