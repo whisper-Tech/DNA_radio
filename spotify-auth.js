@@ -128,6 +128,7 @@ let _player = null;
 let _deviceId = null;
 let _onStateChange = null;
 let _sdkLoaded = false;
+let _autoPlaySuppressed = false; // true once we've killed the initial auto-play
 
 function loadSDK() {
   if (_sdkLoaded) return Promise.resolve();
@@ -154,9 +155,35 @@ export async function initSpotifyPlayer(onState) {
       volume: 0.65,
     });
 
-    _player.addListener('ready', ({ device_id }) => {
+    _player.addListener('ready', async ({ device_id }) => {
       _deviceId = device_id;
       console.log('[Spotify] Ready, device:', device_id);
+
+      // CRITICAL: Spotify auto-transfers playback and starts playing random
+      // content when a new Web Playback SDK device connects. We must:
+      // 1. Transfer playback to our device with play:false
+      // 2. Immediately pause anything that started
+      try {
+        const tk = await getValidToken();
+        // Transfer playback to our device WITHOUT starting play
+        await fetch('https://api.spotify.com/v1/me/player', {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${tk}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_ids: [device_id], play: false }),
+        });
+        // Belt-and-suspenders: also hit pause endpoint
+        await fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${device_id}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${tk}` },
+        });
+        _autoPlaySuppressed = true;
+        console.log('[Spotify] Auto-play suppressed');
+      } catch (e) {
+        console.warn('[Spotify] Could not suppress auto-play:', e.message);
+        // Still try local pause as last resort
+        try { await _player.pause(); } catch(_) {}
+      }
+
       resolve(_player);
     });
 
@@ -165,8 +192,16 @@ export async function initSpotifyPlayer(onState) {
       _deviceId = null;
     });
 
-    _player.addListener('player_state_changed', state => {
-      if (_onStateChange && state) _onStateChange(state);
+    _player.addListener('player_state_changed', async (sdkState) => {
+      // If we haven't suppressed auto-play yet and something is playing,
+      // that's Spotify's auto-play — kill it immediately
+      if (!_autoPlaySuppressed && sdkState && !sdkState.paused) {
+        console.log('[Spotify] Killing auto-play (state change before suppression)');
+        try { await _player.pause(); } catch(_) {}
+        _autoPlaySuppressed = true;
+        return; // Don't propagate this bogus state to the app
+      }
+      if (_onStateChange && sdkState) _onStateChange(sdkState);
     });
 
     _player.addListener('initialization_error', ({ message }) => {
@@ -224,3 +259,4 @@ export async function spotifySetVolume(fraction) {
 export function getSpotifyPlayer() { return _player; }
 export function getDeviceId() { return _deviceId; }
 export function isSpotifyReady() { return !!_deviceId; }
+export function markAutoPlayHandled() { _autoPlaySuppressed = true; }

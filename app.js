@@ -8,7 +8,7 @@ import { ClockworkRadio } from './radio.js';
 import {
   getStoredToken, handleCallback, startSpotifyAuth, initSpotifyPlayer,
   spotifyPlay, spotifyPause, spotifyResume, spotifySeek, spotifySetVolume,
-  isSpotifyReady, clearTokens,
+  isSpotifyReady, clearTokens, markAutoPlayHandled,
 } from './spotify-auth.js';
 import { youtubePlayer } from './youtube.js';
 
@@ -301,7 +301,12 @@ async function initAudio() {
       state.spotifyAvailable = true;
       state.audioSource = 'spotify';
       updateSourceIndicator('SPOTIFY');
-      console.log('[Radio] Spotify connected');
+      console.log('[Radio] Spotify connected (auto-play suppressed, waiting for syncToRadio)');
+
+      // Also init YouTube in the background so fallback tracks (no spotifyUri) work
+      youtubePlayer.init();
+      youtubePlayer.onStateChange(handleYouTubeState);
+      youtubePlayer.onTrackEnd(handleTrackEnd);
       return;
     }
   }
@@ -364,13 +369,29 @@ function playTrackAtIndex(index, seekSeconds) {
   updateMobileActiveState(song.id);
   if (window.helixSetCurrentTrack) window.helixSetCurrentTrack(index);
 
-  if (state.audioSource === 'spotify' && song.spotifyUri) {
+  // Mark auto-play as handled so the suppression guard in spotify-auth
+  // doesn't block OUR intentional play commands
+  markAutoPlayHandled();
+
+  if (state.spotifyAvailable && song.spotifyUri) {
+    // Has a Spotify URI and Spotify is connected — play on Spotify
+    // If YouTube was playing a fallback track, stop it
+    youtubePlayer.pause();
     spotifyPlay(song.spotifyUri, (seekSeconds || 0) * 1000);
+    if (state.audioSource !== 'spotify') {
+      state.audioSource = 'spotify';
+      updateSourceIndicator('SPOTIFY');
+    }
   } else {
+    // No Spotify URI OR not on Spotify — use YouTube
+    // If Spotify was active, pause it so we don't get dual audio
+    if (state.spotifyAvailable) {
+      spotifyPause();
+    }
     youtubePlayer.play(song.youtubeId, seekSeconds || 0);
     if (state.audioSource !== 'youtube') {
       state.audioSource = 'youtube';
-      updateSourceIndicator('YOUTUBE');
+      updateSourceIndicator('YOUTUBE (fallback)');
     }
   }
   state.isPlaying = true;
@@ -431,8 +452,8 @@ function updateHUDForTrack(song) {
   updateVoteButtonStates(song.id);
   const score = song.health || 0;
   const vs = document.getElementById('vote-status');
-  if (score >= 10) { vs.textContent = '\u2605 IMMORTAL TRACK \u2605'; vs.style.color = '#ffd700'; }
-  else if (score <= -10) { vs.textContent = '\u2715 TRACK CONDEMNED'; vs.style.color = '#ff0040'; }
+  if (score >= 10) { vs.textContent = '★ IMMORTAL TRACK ★'; vs.style.color = '#ffd700'; }
+  else if (score <= -10) { vs.textContent = '✕ TRACK CONDEMNED'; vs.style.color = '#ff0040'; }
   else { vs.textContent = `HEALTH: ${score >= 0 ? '+' : ''}${score} / 10`; vs.style.color = ''; }
 }
 
@@ -457,11 +478,11 @@ function updateSourceIndicator(text) {
     el.id = 'audio-source-indicator';
     document.getElementById('vote-status')?.parentNode?.appendChild(el);
   }
-  el.textContent = text === 'SPOTIFY' ? '\u266B SPOTIFY' : text === 'YOUTUBE' ? '\u25B6 YOUTUBE' : text;
+  el.textContent = text === 'SPOTIFY' ? '♫ SPOTIFY' : text === 'YOUTUBE' ? '▶ YOUTUBE' : text;
   el.className = text === 'SPOTIFY' ? 'source-spotify' : 'source-youtube';
   const btn = document.getElementById('btn-spotify-toggle');
   if (btn) {
-    btn.textContent = state.spotifyAvailable ? '\u266B SPOTIFY' : '\u25B6 YOUTUBE \u2192 CONNECT SPOTIFY';
+    btn.textContent = state.spotifyAvailable ? '♫ SPOTIFY' : '▶ YOUTUBE → CONNECT SPOTIFY';
     btn.title = state.spotifyAvailable ? 'Spotify Premium connected' : 'Click to connect Spotify';
   }
 }
@@ -497,7 +518,7 @@ function voteOnCurrent(voteType) {
   updateVoteButtonStates(song.id);
   updateSidebarTrackHealth(song.id, song.health);
   if (window.helixUpdateHealth) window.helixUpdateHealth(song.id, song.health);
-  showToast(voteType === 'accept' ? `\u2665 HEALTH: +${song.health}` : `\u2715 HEALTH: ${song.health}`);
+  showToast(voteType === 'accept' ? `♥ HEALTH: +${song.health}` : `✕ HEALTH: ${song.health}`);
 }
 
 function flashHUD(type) {
@@ -547,7 +568,7 @@ function buildSidebar() {
         <div class="track-title">${esc(song.title)}</div>
         <div class="track-artist">${esc(song.artist)}</div>
       </div>
-      <div class="track-health ${score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero'}">${score !== 0 ? (score > 0 ? '+' : '') + score : '\u00B7'}</div>
+      <div class="track-health ${score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero'}">${score !== 0 ? (score > 0 ? '+' : '') + score : '·'}</div>
     `;
     item.addEventListener('click', () => playTrackManual(idx));
     item.addEventListener('dragstart', e => {
@@ -577,7 +598,7 @@ function updateSidebarTrackHealth(songId, score) {
   const item = document.querySelector(`.sidebar-track[data-id="${songId}"]`);
   if (!item) return;
   const h = item.querySelector('.track-health');
-  h.textContent = score !== 0 ? (score > 0 ? '+' : '') + score : '\u00B7';
+  h.textContent = score !== 0 ? (score > 0 ? '+' : '') + score : '·';
   h.className = 'track-health ' + (score >= 10 ? 'gold' : score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero');
 }
 
