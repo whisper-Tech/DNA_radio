@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DNA RADIO // WHISPER COLLEGE</title>
+  <title>WHISPER COLLEGE // 24/7 RADIO</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,21 +18,9 @@
   }
   </script>
 
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="auth.css" />
+  <link rel="stylesheet" href="style.css?v=12" />
 </head>
 <body>
-
-  <!-- AUTH OVERLAY -->
-  <div id="auth-overlay">
-    <!-- Fallback content shown until JS renders the gate -->
-    <noscript>
-      <div style="color:#00e5ff;text-align:center;padding:40px;font-family:monospace">
-        <h1>DNA RADIO // WHISPER COLLEGE</h1>
-        <p>JavaScript is required to enter.</p>
-      </div>
-    </noscript>
-  </div>
 
   <!-- AMBIENT PARTICLES -->
   <div id="ambient-particles"></div>
@@ -48,22 +36,17 @@
     <span><span style="opacity:0.08;font-size:0.7em">r</span>DNA INTERFACE: ONLINE</span>
   </div>
 
-  <!-- ===== PHASE 1: THE VOID ===== -->
+  <!-- ===== PHASE 1: THE VOID (black + hidden star) ===== -->
   <div id="phase-void">
     <canvas id="void-canvas"></canvas>
-    <div id="void-hint">LOCATE THE BEACON // HOLD TO ENTER</div>
   </div>
 
-  <!-- ===== PHASE 2: VORTEX TRANSITION ===== -->
-  <div id="phase-vortex" class="hidden">
-    <canvas id="vortex-canvas"></canvas>
-    <div id="vortex-text">
-      <div id="vortex-welcome">WELCOME</div>
-      <div id="vortex-secret">WHISPER COLLEGE</div>
-    </div>
+  <!-- ===== PHASE 1.5: REVEAL TEXT ===== -->
+  <div id="phase-reveal" class="hidden">
+    <div id="reveal-text"></div>
   </div>
 
-  <!-- ===== PHASE 3: MAIN INTERFACE ===== -->
+  <!-- ===== PHASE 2: MAIN INTERFACE ===== -->
   <div id="phase-main" class="hidden">
 
     <!-- DNA HELIX AREA -->
@@ -87,7 +70,6 @@
 
     <!-- NOW PLAYING HUD -->
     <div id="now-playing-hud">
-      <!-- Left: Song Info -->
       <div id="hud-left">
         <div id="hud-art">
           <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -97,8 +79,8 @@
           </svg>
         </div>
         <div id="hud-song-info">
-          <div id="hud-title">SELECT A TRACK</div>
-          <div id="hud-artist">DNA RADIO</div>
+          <div id="hud-title">TUNING IN...</div>
+          <div id="hud-artist">WHISPER COLLEGE RADIO</div>
           <div id="hud-health-display">
             <span id="health-label">HEALTH</span>
             <span id="health-bar-wrap"><span id="health-bar"></span></span>
@@ -107,7 +89,6 @@
         </div>
       </div>
 
-      <!-- Center: Controls -->
       <div id="hud-center">
         <div id="hud-controls">
           <button id="btn-prev" title="Previous" aria-label="Previous track">
@@ -136,27 +117,23 @@
           <span id="hud-time-total">0:00</span>
         </div>
         <div id="hud-vote-display">
-          <span id="vote-status">NO ACTIVE TRACK</span>
+          <span id="vote-status">TUNING IN...</span>
         </div>
       </div>
 
-      <!-- Right: Volume + Spotify -->
       <div id="hud-right">
         <div id="volume-wrap">
           <label for="volume-slider" id="vol-label">VOL</label>
           <input type="range" id="volume-slider" min="0" max="100" value="65" />
           <span id="vol-val">65</span>
         </div>
-
         <div id="spotify-toggle-wrap">
-          <button id="btn-spotify-toggle" class="spotify-btn" title="Audio powered by YouTube">▶ YOUTUBE</button>
+          <button id="btn-spotify-toggle" class="spotify-btn" title="Audio source">▶ YOUTUBE → CONNECT SPOTIFY</button>
         </div>
       </div>
     </div>
 
-    <!-- Spotify widget removed — YouTube-only playback -->
-
-    <!-- MOBILE SIMPLIFIED LIST -->
+    <!-- MOBILE LIST -->
     <div id="mobile-list-view">
       <div id="mobile-header">WHISPER COLLEGE</div>
       <div id="mobile-search-wrap">
@@ -167,13 +144,10 @@
 
   </div><!-- /phase-main -->
 
-  <!-- HIDDEN YOUTUBE PLAYER (IFrame Player API) — must be visible for YT to allow playback -->
+  <!-- HIDDEN YOUTUBE PLAYER -->
   <div id="yt-player-container" style="position:fixed;bottom:0;left:0;width:320px;height:180px;opacity:0.01;pointer-events:none;z-index:-1;"></div>
 
-  <!-- Ambient radio removed — YouTube-only playback -->
-
-  <!-- YouTube-only audio mode — no Spotify SDK needed -->
-  <script src="app.js?v=11" type="module"></script>
+  <script src="app.js?v=12" type="module"></script>
 
 </body>
 </html>

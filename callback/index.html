@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connecting Spotify...</title>
+  <style>
+    body { background: #000; color: #00e5ff; font-family: 'JetBrains Mono', monospace; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .msg { text-align: center; font-size: 14px; letter-spacing: 0.1em; opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <div class="msg">CONNECTING TO SPOTIFY...</div>
+  <script>
+    // Forward the auth code back to the main page
+    window.location.href = '/' + window.location.search;
+  </script>
+</body>
+</html>

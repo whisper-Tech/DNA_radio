@@ -1187,3 +1187,36 @@ html, body {
   pointer-events: none;
   z-index: 10;
 }
+
+/* ---- PHASE: REVEAL (Whisper ~ College) ---- */
+#phase-reveal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  background: transparent;
+}
+
+#reveal-text {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  color: rgba(200, 220, 255, 0.85);
+  text-shadow: 0 0 30px rgba(0, 229, 255, 0.3), 0 0 60px rgba(0, 229, 255, 0.1);
+  white-space: nowrap;
+}
+
+/* ---- HELIX ANNOTATION (v11) ---- */
+.helix-annotation {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: rgba(0,229,255,0.45);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  pointer-events: none;
+  white-space: nowrap;
+  text-shadow: 0 0 6px rgba(0,229,255,0.3);
+}
