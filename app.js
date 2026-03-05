@@ -1,5 +1,5 @@
 /**
- * DNA RADIO // THE SECRET
+ * DNA RADIO // WHISPER COLLEGE
  * Main Application Logic
  * Phases: Void → Vortex Transition → Main Interface
  */
@@ -24,7 +24,7 @@ try {
 }
 
 try {
-  const spotMod = await import('./spotify.js?v=8');
+  const spotMod = await import('./spotify.js?v=9');
   audioController = spotMod.audioController;
   spotifyLogin = spotMod.spotifyLogin;
   spotifyLogout = spotMod.spotifyLogout;
@@ -331,22 +331,44 @@ let vortexParticles = [];
 
 function createVortexParticles() {
   vortexParticles = [];
-  for (let i = 0; i < 200; i++) {
+  const STRAND_COUNT = 300; // 150 per strand
+  const BRIDGE_COUNT = 40;  // cross-links between strands
+
+  // Strand A and Strand B particles
+  for (let i = 0; i < STRAND_COUNT; i++) {
+    const strand = i < STRAND_COUNT / 2 ? 0 : 1; // 0=strand A, 1=strand B
+    const idx = strand === 0 ? i : i - STRAND_COUNT / 2;
     const angle = Math.random() * Math.PI * 2;
     const radius = Math.random() * Math.max(window.innerWidth, window.innerHeight) * 0.7;
     vortexParticles.push({
       x: window.innerWidth / 2 + Math.cos(angle) * radius,
       y: window.innerHeight / 2 + Math.sin(angle) * radius,
-      tx: window.innerWidth / 2,  // target x
-      ty: window.innerHeight / 2,  // target y
-      vx: 0, vy: 0,
-      r: Math.random() * 2 + 0.5,
+      r: Math.random() * 2.2 + 0.6,
       alpha: Math.random() * 0.7 + 0.3,
-      speed: Math.random() * 0.015 + 0.005,
       angle,
       radius,
-      spin: (Math.random() - 0.5) * 0.05,
-      phase: 0,  // 0=converging, 1=helix
+      spin: (Math.random() - 0.5) * 0.04,
+      strand,       // 0 or 1
+      strandIdx: idx / (STRAND_COUNT / 2), // 0..1 position along helix
+      type: 'strand',
+    });
+  }
+
+  // Bridge particles (the rungs connecting the two strands)
+  for (let i = 0; i < BRIDGE_COUNT; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.random() * Math.max(window.innerWidth, window.innerHeight) * 0.5;
+    vortexParticles.push({
+      x: window.innerWidth / 2 + Math.cos(angle) * radius,
+      y: window.innerHeight / 2 + Math.sin(angle) * radius,
+      r: Math.random() * 1.5 + 0.4,
+      alpha: Math.random() * 0.5 + 0.2,
+      angle,
+      radius,
+      spin: (Math.random() - 0.5) * 0.03,
+      strand: 2,    // bridge
+      strandIdx: i / BRIDGE_COUNT,
+      type: 'bridge',
     });
   }
 }
@@ -361,42 +383,117 @@ function animateVortex(startTime) {
 
     const cx = window.innerWidth / 2;
     const cy = window.innerHeight / 2;
+    const helixHeight = Math.min(window.innerHeight * 0.6, 500);
+    const helixRadius = Math.min(window.innerWidth * 0.12, 120);
+    const helixTurns = 3; // full rotations visible
 
     function frame() {
       const elapsed = (Date.now() - startTime) / 1000;
       vortexCtx.clearRect(0, 0, vortexCanvas.width, vortexCanvas.height);
 
-      // phase 0-8s: converge
-      // phase 8-12s: form helix bars
-      const progress = Math.min(elapsed / 12, 1);
+      // Smooth easing helper
+      const ease = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 
       for (const p of vortexParticles) {
         if (elapsed < 8) {
-          // Converge toward center in spiral
+          // Phase 1 (0-8s): Converge inward in a dual-spiral
           const t = elapsed / 8;
-          const targetAngle = p.angle + p.spin * elapsed * 60;
-          const targetRadius = p.radius * (1 - t * 0.85);
+          const easeT = ease(Math.min(t, 1));
+          // Each strand spirals from opposite sides
+          const strandOffset = p.strand === 1 ? Math.PI : 0;
+          const targetAngle = p.angle + strandOffset * easeT + p.spin * elapsed * 50;
+          const targetRadius = p.radius * (1 - easeT * 0.9);
           const tx = cx + Math.cos(targetAngle) * targetRadius;
           const ty = cy + Math.sin(targetAngle) * targetRadius;
-          p.x += (tx - p.x) * 0.08;
-          p.y += (ty - p.y) * 0.08;
+          p.x += (tx - p.x) * 0.06;
+          p.y += (ty - p.y) * 0.06;
         } else {
-          // Helix formation
-          const helixT = (elapsed - 8) / 4;
-          const helixPhase = (vortexParticles.indexOf(p) / vortexParticles.length);
-          const angle = helixPhase * Math.PI * 4 + helixT * Math.PI;
-          const helixRadius = 80 * (1 - helixT * 0.8);
-          const helixY = cy - 200 + helixPhase * 400;
-          const tx = cx + Math.cos(angle) * helixRadius;
-          p.x += (tx - p.x) * 0.12;
-          p.y += (helixY - p.y) * 0.12;
+          // Phase 2 (8-12s): Form double helix
+          const helixT = Math.min((elapsed - 8) / 3, 1); // lock in by 11s
+          const easeH = ease(helixT);
+          const pos = p.strandIdx; // 0..1 along helix
+          const rotationSpeed = elapsed * 0.4; // slow rotation of whole helix
+
+          // Vertical position along the helix
+          const targetY = cy - helixHeight / 2 + pos * helixHeight;
+
+          if (p.type === 'strand') {
+            // Each strand is offset by PI (180 degrees)
+            const strandOffset = p.strand === 0 ? 0 : Math.PI;
+            const theta = pos * Math.PI * 2 * helixTurns + strandOffset + rotationSpeed;
+            const r = helixRadius * easeH;
+            const targetX = cx + Math.cos(theta) * r;
+
+            p.x += (targetX - p.x) * 0.1;
+            p.y += (targetY - p.y) * 0.1;
+          } else {
+            // Bridge: interpolate between where strand A and strand B are
+            const theta0 = pos * Math.PI * 2 * helixTurns + rotationSpeed;
+            const theta1 = theta0 + Math.PI;
+            const r = helixRadius * easeH;
+            const ax = cx + Math.cos(theta0) * r;
+            const bx = cx + Math.cos(theta1) * r;
+            // Bridge sits in the middle
+            const bridgeFrac = 0.3 + Math.random() * 0.4; // slight variation
+            const targetX = ax + (bx - ax) * bridgeFrac;
+
+            p.x += (targetX - p.x) * 0.08;
+            p.y += (targetY - p.y) * 0.08;
+          }
         }
 
-        const alpha = elapsed < 9 ? p.alpha : p.alpha * (1 - (elapsed - 9) / 3);
+        // Alpha: full until 9s, then fade out over 3s
+        const alpha = elapsed < 9 ? p.alpha : p.alpha * Math.max(0, 1 - (elapsed - 9) / 3);
+
+        // Color: strand A = cyan, strand B = slightly different cyan, bridges = dimmer
+        let color;
+        if (p.type === 'bridge') {
+          color = `rgba(0,180,220,${Math.max(0, alpha * 0.6)})`;
+        } else if (p.strand === 0) {
+          color = `rgba(0,229,255,${Math.max(0, alpha)})`;
+        } else {
+          color = `rgba(0,200,240,${Math.max(0, alpha * 0.9)})`;
+        }
+
+        // Glow effect for strand particles
+        if (p.type === 'strand' && alpha > 0.2) {
+          vortexCtx.beginPath();
+          vortexCtx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2);
+          vortexCtx.fillStyle = `rgba(0,229,255,${Math.max(0, alpha * 0.08)})`;
+          vortexCtx.fill();
+        }
+
         vortexCtx.beginPath();
         vortexCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        vortexCtx.fillStyle = `rgba(0,229,255,${Math.max(0, alpha)})`;
+        vortexCtx.fillStyle = color;
         vortexCtx.fill();
+      }
+
+      // Draw faint connecting lines between nearby bridge and strand particles during helix phase
+      if (elapsed >= 8.5) {
+        const lineAlpha = Math.min((elapsed - 8.5) / 1.5, 1) * (elapsed < 9.5 ? 1 : Math.max(0, 1 - (elapsed - 9.5) / 2.5));
+        if (lineAlpha > 0) {
+          vortexCtx.strokeStyle = `rgba(0,229,255,${lineAlpha * 0.12})`;
+          vortexCtx.lineWidth = 0.5;
+          const bridges = vortexParticles.filter(q => q.type === 'bridge');
+          for (const b of bridges) {
+            // Find nearest strand A and strand B particle
+            let nearA = null, nearB = null, dA = Infinity, dB = Infinity;
+            for (const s of vortexParticles) {
+              if (s.type !== 'strand') continue;
+              const dx = s.x - b.x, dy = s.y - b.y;
+              const d = dx * dx + dy * dy;
+              if (s.strand === 0 && d < dA) { dA = d; nearA = s; }
+              if (s.strand === 1 && d < dB) { dB = d; nearB = s; }
+            }
+            if (nearA && nearB && dA < 15000 && dB < 15000) {
+              vortexCtx.beginPath();
+              vortexCtx.moveTo(nearA.x, nearA.y);
+              vortexCtx.lineTo(nearB.x, nearB.y);
+              vortexCtx.stroke();
+            }
+          }
+        }
       }
 
       if (elapsed < 12) {
@@ -439,7 +536,7 @@ async function triggerVortex() {
       document.getElementById('vortex-welcome').classList.add('visible');
     }, 200);
 
-    // 4-8s: TO THE SECRET fades in
+    // 4-8s: WHISPER COLLEGE fades in
     setTimeout(() => {
       document.getElementById('vortex-secret').classList.add('visible');
     }, 4000);
@@ -1165,7 +1262,7 @@ function buildCSSHelixFallback() {
       <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;">
         <div style="text-align:center;">
           <div style="color:rgba(0,229,255,0.5);font-family:'Oxanium',monospace;font-size:1.8rem;letter-spacing:0.4em;text-shadow:0 0 20px rgba(0,229,255,0.3);">DNA RADIO</div>
-          <div style="color:rgba(0,229,255,0.25);font-family:'Oxanium',monospace;font-size:0.65rem;margin-top:8px;letter-spacing:0.6em;">THE SECRET</div>
+          <div style="color:rgba(0,229,255,0.25);font-family:'Oxanium',monospace;font-size:0.65rem;margin-top:8px;letter-spacing:0.6em;">WHISPER COLLEGE</div>
         </div>
       </div>
       <div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.8) 100%);pointer-events:none;z-index:3;"></div>
