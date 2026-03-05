@@ -337,61 +337,26 @@ function handleYouTubeState(ytState) {
 }
 
 function handleTrackEnd() {
-  // Re-sync to clockwork radio — it knows what should play next
-  setTimeout(() => syncToRadio(), 500);
+  // Track ended naturally — play the next one sequentially
+  console.log('[Radio] Track ended, advancing to next');
+  const next = (state.currentIndex + 1) % state.queue.length;
+  playTrackAtIndex(next, 0);
 }
 
 // ====================================================
-// CLOCKWORK SYNC — join the 24/7 broadcast
+// CLOCKWORK SYNC — used ONLY on initial load to join the broadcast
+// After that, playback is sequential (no random jumps).
 // ====================================================
-let _syncTimer = null;
-
 function syncToRadio() {
   const now = radio.getNow();
   const song = now.track;
   const seekSec = now.positionSeconds;
-
-  console.log(`[Radio] Sync: "${song.title}" at ${Math.floor(seekSec)}s`);
-
-  state.currentIndex = now.trackIndex;
-  updateHUDForTrack(song);
-  updateSidebarActiveState(song.id);
-  updateMobileActiveState(song.id);
-  if (window.helixSetCurrentTrack) window.helixSetCurrentTrack(now.trackIndex);
-
-  // Update real duration if we have it
-  if (state.duration > 10) radio.setRealDuration(now.trackIndex, state.duration);
-
-  // Play at the right position
-  if (state.audioSource === 'spotify' && song.spotifyUri) {
-    spotifyPlay(song.spotifyUri, seekSec * 1000);
-  } else {
-    state.audioSource = 'youtube';
-    youtubePlayer.play(song.youtubeId, seekSec);
-    updateSourceIndicator('YOUTUBE');
-  }
-
-  state.isPlaying = true;
-
-  // Schedule next sync when this track should end
-  clearTimeout(_syncTimer);
-  const remaining = radio.getSecondsUntilNextTrack();
-  _syncTimer = setTimeout(() => syncToRadio(), (remaining + 0.5) * 1000);
+  console.log(`[Radio] Initial sync: "${song.title}" at ${Math.floor(seekSec)}s`);
+  playTrackAtIndex(now.trackIndex, seekSec);
 }
 
-// Manual next/prev (overrides clockwork temporarily — re-syncs on end)
-function playNext() {
-  const next = (state.currentIndex + 1) % state.queue.length;
-  playTrackManual(next);
-}
-
-function playPrev() {
-  const prev = (state.currentIndex - 1 + state.queue.length) % state.queue.length;
-  playTrackManual(prev);
-}
-
-function playTrackManual(index) {
-  clearTimeout(_syncTimer);
+// Core playback function — plays track at index, optionally seeking
+function playTrackAtIndex(index, seekSeconds) {
   state.currentIndex = index;
   const song = state.queue[index];
   updateHUDForTrack(song);
@@ -400,15 +365,29 @@ function playTrackManual(index) {
   if (window.helixSetCurrentTrack) window.helixSetCurrentTrack(index);
 
   if (state.audioSource === 'spotify' && song.spotifyUri) {
-    spotifyPlay(song.spotifyUri, 0);
+    spotifyPlay(song.spotifyUri, (seekSeconds || 0) * 1000);
   } else {
-    youtubePlayer.play(song.youtubeId, 0);
+    youtubePlayer.play(song.youtubeId, seekSeconds || 0);
+    if (state.audioSource !== 'youtube') {
+      state.audioSource = 'youtube';
+      updateSourceIndicator('YOUTUBE');
+    }
   }
   state.isPlaying = true;
+}
 
-  // Schedule re-sync after this track ends (estimate)
-  const dur = song.duration || 210;
-  _syncTimer = setTimeout(() => syncToRadio(), (dur + 1) * 1000);
+function playNext() {
+  const next = (state.currentIndex + 1) % state.queue.length;
+  playTrackAtIndex(next, 0);
+}
+
+function playPrev() {
+  const prev = (state.currentIndex - 1 + state.queue.length) % state.queue.length;
+  playTrackAtIndex(prev, 0);
+}
+
+function playTrackManual(index) {
+  playTrackAtIndex(index, 0);
 }
 
 // ====================================================
@@ -452,8 +431,8 @@ function updateHUDForTrack(song) {
   updateVoteButtonStates(song.id);
   const score = song.health || 0;
   const vs = document.getElementById('vote-status');
-  if (score >= 10) { vs.textContent = '★ IMMORTAL TRACK ★'; vs.style.color = '#ffd700'; }
-  else if (score <= -10) { vs.textContent = '✕ TRACK CONDEMNED'; vs.style.color = '#ff0040'; }
+  if (score >= 10) { vs.textContent = '\u2605 IMMORTAL TRACK \u2605'; vs.style.color = '#ffd700'; }
+  else if (score <= -10) { vs.textContent = '\u2715 TRACK CONDEMNED'; vs.style.color = '#ff0040'; }
   else { vs.textContent = `HEALTH: ${score >= 0 ? '+' : ''}${score} / 10`; vs.style.color = ''; }
 }
 
@@ -478,11 +457,11 @@ function updateSourceIndicator(text) {
     el.id = 'audio-source-indicator';
     document.getElementById('vote-status')?.parentNode?.appendChild(el);
   }
-  el.textContent = text === 'SPOTIFY' ? '♫ SPOTIFY' : text === 'YOUTUBE' ? '▶ YOUTUBE' : text;
+  el.textContent = text === 'SPOTIFY' ? '\u266B SPOTIFY' : text === 'YOUTUBE' ? '\u25B6 YOUTUBE' : text;
   el.className = text === 'SPOTIFY' ? 'source-spotify' : 'source-youtube';
   const btn = document.getElementById('btn-spotify-toggle');
   if (btn) {
-    btn.textContent = state.spotifyAvailable ? '♫ SPOTIFY' : '▶ YOUTUBE → CONNECT SPOTIFY';
+    btn.textContent = state.spotifyAvailable ? '\u266B SPOTIFY' : '\u25B6 YOUTUBE \u2192 CONNECT SPOTIFY';
     btn.title = state.spotifyAvailable ? 'Spotify Premium connected' : 'Click to connect Spotify';
   }
 }
@@ -518,7 +497,7 @@ function voteOnCurrent(voteType) {
   updateVoteButtonStates(song.id);
   updateSidebarTrackHealth(song.id, song.health);
   if (window.helixUpdateHealth) window.helixUpdateHealth(song.id, song.health);
-  showToast(voteType === 'accept' ? `♥ HEALTH: +${song.health}` : `✕ HEALTH: ${song.health}`);
+  showToast(voteType === 'accept' ? `\u2665 HEALTH: +${song.health}` : `\u2715 HEALTH: ${song.health}`);
 }
 
 function flashHUD(type) {
@@ -568,7 +547,7 @@ function buildSidebar() {
         <div class="track-title">${esc(song.title)}</div>
         <div class="track-artist">${esc(song.artist)}</div>
       </div>
-      <div class="track-health ${score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero'}">${score !== 0 ? (score > 0 ? '+' : '') + score : '·'}</div>
+      <div class="track-health ${score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero'}">${score !== 0 ? (score > 0 ? '+' : '') + score : '\u00B7'}</div>
     `;
     item.addEventListener('click', () => playTrackManual(idx));
     item.addEventListener('dragstart', e => {
@@ -598,7 +577,7 @@ function updateSidebarTrackHealth(songId, score) {
   const item = document.querySelector(`.sidebar-track[data-id="${songId}"]`);
   if (!item) return;
   const h = item.querySelector('.track-health');
-  h.textContent = score !== 0 ? (score > 0 ? '+' : '') + score : '·';
+  h.textContent = score !== 0 ? (score > 0 ? '+' : '') + score : '\u00B7';
   h.className = 'track-health ' + (score >= 10 ? 'gold' : score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero');
 }
 
