@@ -13,7 +13,6 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
-// ── Configuration ─────────────────────────────────────────────────────────────
 const CFG = {
   helixRadius: 1.6,
   rungSpacing: 0.72,
@@ -32,7 +31,6 @@ const CFG = {
   nodeRadius: 0.10,
 };
 
-// ── DNA Base-Pair Neon Color Palette ──────────────────────────────────────────
 const BASE_PAIR_COLORS = [
   { left: { color: 0xff0066, emissive: 0xaa0044, emInt: 1.8 },
     right: { color: 0x00e5ff, emissive: 0x007799, emInt: 1.8 } },
@@ -51,7 +49,6 @@ const STRAND_COLORS = {
   strand2: { color: 0xcc44ff, emissive: 0x6622aa },
 };
 
-// ── Module state ─────────────────────────────────────────────────────────────
 let scene, camera, renderer, labelRenderer, composer;
 let helixGroup;
 
@@ -82,7 +79,6 @@ function _seededRandom(seed) {
   return x - Math.floor(x);
 }
 
-// ── Public init ───────────────────────────────────────────────────────────────
 export function initDNAHelix(state, callbacks) {
   appState = state;
   onTrackSelectCb = callbacks.onTrackSelect;
@@ -168,19 +164,12 @@ export function initDNAHelix(state, callbacks) {
   requestAnimationFrame(loop);
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function rungY(visualIdx) {
   return -visualIdx * CFG.rungSpacing;
 }
 
-function queueToVisual(queueIdx) {
-  const current = appState.currentIndex;
-  const len = appState.queue.length;
-  return ((queueIdx - current) + len) % len;
-}
-
 function visualToQueue(visualIdx) {
-  const current = appState.currentIndex;
+  const current = Math.max(0, appState.currentIndex);
   const len = appState.queue.length;
   return (current + visualIdx) % len;
 }
@@ -207,7 +196,6 @@ function getStrandPoint2(visualIdx) {
   );
 }
 
-// ── Build helix ───────────────────────────────────────────────────────────────
 function buildHelixMeshes() {
   const queue = appState.queue;
   const qLen = queue.length;
@@ -335,10 +323,8 @@ function buildHelixMeshes() {
         const localY = -length / 2 + barSpacing * (b + 1);
         const seed = v * 100 + b;
         const randH = 0.1 + _seededRandom(seed) * 0.35;
-
         barMesh.scale.set(barWidth, barDepth, randH);
         barMesh.position.set(0, localY, randH / 2);
-
         rungGroup.add(barMesh);
         bars.push(barMesh);
         baseHeights.push(randH);
@@ -349,10 +335,8 @@ function buildHelixMeshes() {
         const localY = -length / 2 + barSpacing * (b + 1);
         const seed = v * 100 + b + 50;
         const randH = 0.1 + _seededRandom(seed) * 0.35;
-
         barMesh.scale.set(barWidth, barDepth, randH);
         barMesh.position.set(0, localY, -randH / 2);
-
         rungGroup.add(barMesh);
         bars.push(barMesh);
         baseHeights.push(randH);
@@ -602,7 +586,6 @@ function clearHelixMeshes() {
   strandPts2 = [];
 }
 
-// ── Render loop ───────────────────────────────────────────────────────────────
 function loop(time) {
   animRAF = requestAnimationFrame(loop);
   const delta = Math.min((time - lastTime) / 1000, 0.1);

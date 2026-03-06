@@ -1,5 +1,5 @@
 /**
- * DNA RADIO // WHISPER COLLEGE — v12
+ * DNA RADIO // WHISPER COLLEGE — v15
  * 24/7 Clockwork Radio + Spotify Primary + YouTube Fallback
  * No backend required. No auth gate.
  */
@@ -13,8 +13,7 @@ import {
 import { youtubePlayer } from './youtube.js';
 
 // ====================================================
-// PLAYLIST DATA — each track needs youtubeId, optional spotifyUri
-// duration: seconds (defaults to 210 if unknown, refined at runtime)
+// PLAYLIST DATA
 // ====================================================
 const PLAYLIST = [
   { id:"s1",  title:"All Your Exes",                         artist:"Julia Michaels",                              health:0, youtubeId:"REKWd0u7YgU", spotifyUri:"spotify:track:4kMgpLBKVRmQE0MRRQDKNA", duration:189 },
@@ -27,8 +26,8 @@ const PLAYLIST = [
   { id:"s8",  title:"Best Part Of The Story",                artist:"SkyDxddy",                                    health:0, youtubeId:"4Av1L5Rmoj0", duration:200 },
   { id:"s9",  title:"God Of War",                            artist:"SkyDxddy",                                    health:0, youtubeId:"isvwPvc6Dqk", duration:195 },
   { id:"s10", title:"SNAP",                                  artist:"Rosa Linn",                                   health:0, youtubeId:"Lo4_K4relMg", spotifyUri:"spotify:track:4CsGPRKLjR2VHXFE6gHIQp", duration:178 },
-  { id:"s11", title:"kill the girl",                         artist:"LØLØ",                                        health:0, youtubeId:"zmH7PJiR2yk", duration:190 },
-  { id:"s12", title:"5,6,7,8",                               artist:"LØLØ, girlfriends",                           health:0, youtubeId:"NVOhlLfcQ7U", duration:185 },
+  { id:"s11", title:"kill the girl",                         artist:"L\u00d8L\u00d8",                                        health:0, youtubeId:"zmH7PJiR2yk", duration:190 },
+  { id:"s12", title:"5,6,7,8",                               artist:"L\u00d8L\u00d8, girlfriends",                           health:0, youtubeId:"NVOhlLfcQ7U", duration:185 },
   { id:"s13", title:"It Wasn't Easy To Be Happy For You",    artist:"The Lumineers",                               health:0, youtubeId:"eGReASgVM1Q", spotifyUri:"spotify:track:3l2NQJS9LK87ChVVMVSxD7", duration:222 },
   { id:"s14", title:"What's Stopping You",                   artist:"P!X!E",                                       health:0, youtubeId:"o1wxgIps1e4", duration:195 },
   { id:"s15", title:"WATCH THIS",                            artist:"TAELA",                                       health:0, youtubeId:"iycrMFBrnsg", duration:180 },
@@ -38,9 +37,9 @@ const PLAYLIST = [
   { id:"s19", title:"Bullet",                                artist:"Hollywood Undead",                            health:0, youtubeId:"lP077RitNAc", spotifyUri:"spotify:track:0tJ9xhZIAICAjJuNal9hAK", duration:216 },
   { id:"s20", title:"Such Small Hands",                      artist:"La Dispute",                                  health:0, youtubeId:"XlppZKMYNys", spotifyUri:"spotify:track:1K3lbDfFMPB6pQDQbMHJPe", duration:135 },
   { id:"s21", title:"Sara",                                  artist:"We Three",                                    health:0, youtubeId:"IlvELjeisqE", duration:245 },
-  { id:"s22", title:"HELLO LØNELINESS",                      artist:"Ekoh, Lø Spirit",                             health:0, youtubeId:"wAtFJAqTVhA", duration:200 },
+  { id:"s22", title:"HELLO L\u00d8NELINESS",                      artist:"Ekoh, L\u00f8 Spirit",                             health:0, youtubeId:"wAtFJAqTVhA", duration:200 },
   { id:"s23", title:"Lilith",                                artist:"Halsey",                                      health:0, youtubeId:"9PdH-zavwO4", spotifyUri:"spotify:track:4OF29bVGvMgEKsBqvYCGhb", duration:195 },
-  { id:"s24", title:"007",                                   artist:"LØLØ",                                        health:0, youtubeId:"4okJouEbZ_s", duration:180 },
+  { id:"s24", title:"007",                                   artist:"L\u00d8L\u00d8",                                        health:0, youtubeId:"4okJouEbZ_s", duration:180 },
   { id:"s25", title:"GrokBlocked",                           artist:"Pie For Billy",                               health:0, youtubeId:"gGcKxx0yvfE", duration:210 },
   { id:"s26", title:"Mud",                                   artist:"CARR",                                        health:0, youtubeId:"g9X2aSt15jQ", duration:200 },
   { id:"s27", title:"Enemy",                                 artist:"Arrested Youth",                              health:0, youtubeId:"z3PXjKxEkjo", duration:190 },
@@ -57,7 +56,7 @@ const PLAYLIST = [
   { id:"s38", title:"Freckles",                              artist:"honestav",                                    health:0, youtubeId:"BM8y6sVVH2E", duration:185 },
   { id:"s39", title:"The Other Side",                        artist:"Michael Marcagi",                             health:0, youtubeId:"TuQ4im63cMY", duration:195 },
   { id:"s40", title:"HORROR SHOW",                           artist:"Hot Milk",                                    health:0, youtubeId:"OBZ84gQlBtc", duration:200 },
-  { id:"s41", title:"BLOSSOM",                               artist:"RØRY",                                        health:0, youtubeId:"Ya8dZyiD2gE", duration:190 },
+  { id:"s41", title:"BLOSSOM",                               artist:"R\u00d8RY",                                        health:0, youtubeId:"Ya8dZyiD2gE", duration:190 },
   { id:"s42", title:"For the Misfits",                       artist:"SkyDxddy",                                    health:0, youtubeId:"WurYAHXEMXQ", duration:200 },
   { id:"s43", title:"Dear Diary",                            artist:"KidShazam, SkyDxddy, PONS",                   health:0, youtubeId:"IGgxRH7B86M", duration:210 },
   { id:"s44", title:"Angel of Death",                        artist:"SkyDxddy",                                    health:0, youtubeId:"-_GBaVjCsOc", duration:195 },
@@ -86,7 +85,7 @@ const state = {
   healthScores: {},
   progress: 0,
   duration: 0,
-  audioSource: 'none', // 'spotify' | 'youtube' | 'none'
+  audioSource: 'none',
   spotifyAvailable: false,
 };
 
@@ -101,7 +100,7 @@ setInterval(updateStatusTime, 1000);
 updateStatusTime();
 
 // ====================================================
-// PHASE 1: THE VOID — black space + hidden star + hold
+// PHASE 1: THE VOID
 // ====================================================
 const voidCanvas = document.getElementById('void-canvas');
 const voidCtx = voidCanvas.getContext('2d');
@@ -127,7 +126,6 @@ function createStars() {
       twinklePhase: Math.random() * Math.PI * 2,
     });
   }
-  // The ONE secret star — slightly brighter, pulsing subtly
   beaconStar = {
     x: voidCanvas.width * 0.5 + (Math.random() - 0.5) * 120,
     y: voidCanvas.height * 0.45 + (Math.random() - 0.5) * 120,
@@ -148,14 +146,12 @@ function animateVoid() {
     voidCtx.fillStyle = `rgba(255,255,255,${a})`;
     voidCtx.fill();
   }
-  // Beacon — barely visible, slightly warmer
   if (beaconStar) {
     const pulse = 0.3 + 0.2 * Math.sin(t * 1.5);
     voidCtx.beginPath();
     voidCtx.arc(beaconStar.x, beaconStar.y, beaconStar.r + pulse * 0.5, 0, Math.PI * 2);
     voidCtx.fillStyle = `rgba(200,220,255,${pulse})`;
     voidCtx.fill();
-    // Hold ring
     if (holdActive && holdProgress > 0) {
       const angle = -Math.PI / 2 + holdProgress * Math.PI * 2;
       voidCtx.beginPath();
@@ -207,7 +203,7 @@ voidCanvas.addEventListener('touchcancel', cancelHold);
 window.addEventListener('resize', () => { resizeVoidCanvas(); createStars(); });
 
 // ====================================================
-// PHASE 1.5: REVEAL — "Whisper ~ College" text, then transition
+// PHASE 1.5: REVEAL
 // ====================================================
 async function triggerReveal() {
   holdActive = false;
@@ -215,15 +211,12 @@ async function triggerReveal() {
   cancelAnimationFrame(voidAnimFrame);
 
   const voidEl = document.getElementById('phase-void');
-  // Fade the star field slightly
   voidEl.style.transition = 'opacity 1.5s ease';
   voidEl.style.opacity = '0.3';
 
-  // Show the text overlay
   const revealEl = document.getElementById('phase-reveal');
   revealEl.classList.remove('hidden');
 
-  // Type out "Whisper ~ College"
   const textEl = document.getElementById('reveal-text');
   const fullText = 'Whisper ~ College';
   let i = 0;
@@ -235,10 +228,8 @@ async function triggerReveal() {
     }, 90);
   });
 
-  // Hold for a moment
   await new Promise(r => setTimeout(r, 1800));
 
-  // Fade everything out
   revealEl.style.transition = 'opacity 1.2s ease';
   revealEl.style.opacity = '0';
   voidEl.style.opacity = '0';
@@ -247,7 +238,6 @@ async function triggerReveal() {
   voidEl.classList.add('hidden');
   revealEl.classList.add('hidden');
 
-  // Enter main
   initMainInterface();
 }
 
@@ -263,23 +253,23 @@ async function initMainInterface() {
 
   buildSidebar();
   buildMobileList();
-
-  // Init helix
-  if (window.innerWidth > 768) {
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    initHelix();
-  }
-
   setupHUD();
   setupDragDrop();
 
-  // Init audio — try Spotify first, fall back to YouTube
+  // Show main UI immediately so it's visible even if audio init takes time
+  setTimeout(() => { mainEl.style.opacity = '1'; }, 50);
+
+  // Init audio (may take time for Spotify SDK)
   await initAudio();
 
   // Sync to clockwork radio
   syncToRadio();
 
-  setTimeout(() => { mainEl.style.opacity = '1'; }, 50);
+  // Now init helix AFTER currentIndex is set by syncToRadio
+  if (window.innerWidth > 768) {
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    initHelix();
+  }
 
   // Toast container
   if (!document.getElementById('inject-toast')) {
@@ -290,27 +280,31 @@ async function initMainInterface() {
 }
 
 // ====================================================
-// AUDIO INIT — Spotify primary, YouTube fallback
+// AUDIO INIT
 // ====================================================
 async function initAudio() {
   const token = getStoredToken();
   if (token) {
     updateSourceIndicator('Connecting to Spotify...');
-    const player = await initSpotifyPlayer(handleSpotifyState);
-    if (player) {
-      state.spotifyAvailable = true;
-      state.audioSource = 'spotify';
-      updateSourceIndicator('SPOTIFY');
-      console.log('[Radio] Spotify connected (auto-play suppressed, waiting for syncToRadio)');
-
-      // Also init YouTube in the background so fallback tracks (no spotifyUri) work
-      youtubePlayer.init();
-      youtubePlayer.onStateChange(handleYouTubeState);
-      youtubePlayer.onTrackEnd(handleTrackEnd);
-      return;
+    try {
+      const player = await Promise.race([
+        initSpotifyPlayer(handleSpotifyState),
+        new Promise(resolve => setTimeout(() => resolve(null), 8000)),
+      ]);
+      if (player) {
+        state.spotifyAvailable = true;
+        state.audioSource = 'spotify';
+        updateSourceIndicator('SPOTIFY');
+        console.log('[Radio] Spotify connected');
+        youtubePlayer.init();
+        youtubePlayer.onStateChange(handleYouTubeState);
+        youtubePlayer.onTrackEnd(handleTrackEnd);
+        return;
+      }
+    } catch (e) {
+      console.warn('[Radio] Spotify init failed:', e.message);
     }
   }
-  // Fallback to YouTube
   state.audioSource = 'youtube';
   youtubePlayer.init();
   youtubePlayer.onStateChange(handleYouTubeState);
@@ -328,7 +322,6 @@ function handleSpotifyState(spotifyState) {
   state.duration = dur;
   updateProgressUI();
 
-  // Track ended in Spotify
   if (spotifyState.paused && pos === 0 && spotifyState.track_window?.previous_tracks?.length > 0) {
     handleTrackEnd();
   }
@@ -342,15 +335,13 @@ function handleYouTubeState(ytState) {
 }
 
 function handleTrackEnd() {
-  // Track ended naturally — play the next one sequentially
   console.log('[Radio] Track ended, advancing to next');
   const next = (state.currentIndex + 1) % state.queue.length;
   playTrackAtIndex(next, 0);
 }
 
 // ====================================================
-// CLOCKWORK SYNC — used ONLY on initial load to join the broadcast
-// After that, playback is sequential (no random jumps).
+// CLOCKWORK SYNC
 // ====================================================
 function syncToRadio() {
   const now = radio.getNow();
@@ -360,7 +351,6 @@ function syncToRadio() {
   playTrackAtIndex(now.trackIndex, seekSec);
 }
 
-// Core playback function — plays track at index, optionally seeking
 function playTrackAtIndex(index, seekSeconds) {
   state.currentIndex = index;
   const song = state.queue[index];
@@ -369,13 +359,9 @@ function playTrackAtIndex(index, seekSeconds) {
   updateMobileActiveState(song.id);
   if (window.helixSetCurrentTrack) window.helixSetCurrentTrack(index);
 
-  // Mark auto-play as handled so the suppression guard in spotify-auth
-  // doesn't block OUR intentional play commands
   markAutoPlayHandled();
 
   if (state.spotifyAvailable && song.spotifyUri) {
-    // Has a Spotify URI and Spotify is connected — play on Spotify
-    // If YouTube was playing a fallback track, stop it
     youtubePlayer.pause();
     spotifyPlay(song.spotifyUri, (seekSeconds || 0) * 1000);
     if (state.audioSource !== 'spotify') {
@@ -383,8 +369,6 @@ function playTrackAtIndex(index, seekSeconds) {
       updateSourceIndicator('SPOTIFY');
     }
   } else {
-    // No Spotify URI OR not on Spotify — use YouTube
-    // If Spotify was active, pause it so we don't get dual audio
     if (state.spotifyAvailable) {
       spotifyPause();
     }
@@ -418,28 +402,27 @@ function setupHUD() {
   document.getElementById('btn-mute').addEventListener('click', toggleMute);
   document.getElementById('btn-prev').addEventListener('click', playPrev);
   document.getElementById('btn-next').addEventListener('click', playNext);
-  document.getElementById('btn-accept').addEventListener('click', () => voteOnCurrent('accept'));
-  document.getElementById('btn-reject').addEventListener('click', () => voteOnCurrent('reject'));
   document.getElementById('volume-slider').addEventListener('input', () => {
     const val = parseInt(document.getElementById('volume-slider').value);
     document.getElementById('vol-val').textContent = val;
     if (state.audioSource === 'spotify') spotifySetVolume(val / 100);
     else youtubePlayer.setVolume(val);
   });
-  document.getElementById('btn-spotify-toggle').addEventListener('click', handleSourceToggle);
   document.getElementById('hud-progress-bar').addEventListener('click', e => {
     const rect = e.currentTarget.getBoundingClientRect();
     const frac = (e.clientX - rect.left) / rect.width;
     if (state.audioSource === 'spotify') spotifySeek(frac * state.duration * 1000);
     else youtubePlayer.seek(frac * state.duration);
   });
-}
 
-function handleSourceToggle() {
-  if (state.spotifyAvailable) {
-    showToast('SPOTIFY CONNECTED');
-  } else {
-    startSpotifyAuth();
+  // Sidebar toggle
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('collapsed');
+      sidebarToggle.classList.toggle('sidebar-open');
+    });
   }
 }
 
@@ -448,13 +431,11 @@ function updateHUDForTrack(song) {
   document.getElementById('hud-artist').textContent = song.artist;
   document.getElementById('hud-time-cur').textContent = '0:00';
   document.getElementById('hud-time-total').textContent = '0:00';
-  updateHealthDisplay(song);
-  updateVoteButtonStates(song.id);
-  const score = song.health || 0;
-  const vs = document.getElementById('vote-status');
-  if (score >= 10) { vs.textContent = '★ IMMORTAL TRACK ★'; vs.style.color = '#ffd700'; }
-  else if (score <= -10) { vs.textContent = '✕ TRACK CONDEMNED'; vs.style.color = '#ff0040'; }
-  else { vs.textContent = `HEALTH: ${score >= 0 ? '+' : ''}${score} / 10`; vs.style.color = ''; }
+  const ss = document.getElementById('source-status');
+  if (ss) {
+    ss.textContent = state.audioSource === 'spotify' ? '\u266b SPOTIFY' : '\u25b6 YOUTUBE';
+    ss.className = state.audioSource === 'spotify' ? 'source-spotify' : 'source-youtube';
+  }
 }
 
 function updateProgressUI() {
@@ -472,18 +453,10 @@ function formatTime(s) {
 }
 
 function updateSourceIndicator(text) {
-  let el = document.getElementById('audio-source-indicator');
-  if (!el) {
-    el = document.createElement('span');
-    el.id = 'audio-source-indicator';
-    document.getElementById('vote-status')?.parentNode?.appendChild(el);
-  }
-  el.textContent = text === 'SPOTIFY' ? '♫ SPOTIFY' : text === 'YOUTUBE' ? '▶ YOUTUBE' : text;
-  el.className = text === 'SPOTIFY' ? 'source-spotify' : 'source-youtube';
-  const btn = document.getElementById('btn-spotify-toggle');
-  if (btn) {
-    btn.textContent = state.spotifyAvailable ? '♫ SPOTIFY' : '▶ YOUTUBE → CONNECT SPOTIFY';
-    btn.title = state.spotifyAvailable ? 'Spotify Premium connected' : 'Click to connect Spotify';
+  const ss = document.getElementById('source-status');
+  if (ss) {
+    ss.textContent = text === 'SPOTIFY' ? '\u266b SPOTIFY' : text === 'YOUTUBE' ? '\u25b6 YOUTUBE' : text;
+    ss.className = text === 'SPOTIFY' ? 'source-spotify' : 'source-youtube';
   }
 }
 
@@ -499,50 +472,6 @@ function toggleMute() {
   document.getElementById('unmuted-icon').classList.toggle('hidden', isMuted);
   document.getElementById('muted-icon').classList.toggle('hidden', !isMuted);
   document.getElementById('btn-mute').classList.toggle('is-muted', isMuted);
-}
-
-// ====================================================
-// VOTING
-// ====================================================
-function voteOnCurrent(voteType) {
-  const song = state.queue[state.currentIndex];
-  if (!song) return;
-  if (state.votes[song.id]) { showToast('ALREADY VOTED'); return; }
-  state.votes[song.id] = voteType;
-  song.health = voteType === 'accept'
-    ? Math.min((song.health || 0) + 1, 10)
-    : Math.max((song.health || 0) - 1, -10);
-  state.healthScores[song.id] = song.health;
-  flashHUD(voteType);
-  updateHealthDisplay(song);
-  updateVoteButtonStates(song.id);
-  updateSidebarTrackHealth(song.id, song.health);
-  if (window.helixUpdateHealth) window.helixUpdateHealth(song.id, song.health);
-  showToast(voteType === 'accept' ? `♥ HEALTH: +${song.health}` : `✕ HEALTH: ${song.health}`);
-}
-
-function flashHUD(type) {
-  const hud = document.getElementById('now-playing-hud');
-  hud.classList.remove('flash-accept', 'flash-reject');
-  void hud.offsetWidth;
-  hud.classList.add(type === 'accept' ? 'flash-accept' : 'flash-reject');
-}
-
-function updateHealthDisplay(song) {
-  const score = song.health || 0;
-  document.getElementById('health-val').textContent = (score >= 0 ? '+' : '') + score;
-  const bar = document.getElementById('health-bar');
-  bar.style.width = ((score + 10) / 20 * 100) + '%';
-  if (score >= 10) { bar.style.background = '#ffd700'; bar.style.boxShadow = '0 0 10px rgba(255,215,0,0.8)'; }
-  else if (score <= -5) { bar.style.background = '#ff0040'; }
-  else if (score > 0) { bar.style.background = '#00ff88'; }
-  else { bar.style.background = '#00e5ff'; }
-}
-
-function updateVoteButtonStates(songId) {
-  const v = state.votes[songId];
-  document.getElementById('btn-accept').classList.toggle('voted', v === 'accept');
-  document.getElementById('btn-reject').classList.toggle('voted', v === 'reject');
 }
 
 // ====================================================
@@ -568,7 +497,7 @@ function buildSidebar() {
         <div class="track-title">${esc(song.title)}</div>
         <div class="track-artist">${esc(song.artist)}</div>
       </div>
-      <div class="track-health ${score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero'}">${score !== 0 ? (score > 0 ? '+' : '') + score : '·'}</div>
+      <div class="track-health ${score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero'}">${score !== 0 ? (score > 0 ? '+' : '') + score : '\u00b7'}</div>
     `;
     item.addEventListener('click', () => playTrackManual(idx));
     item.addEventListener('dragstart', e => {
@@ -598,7 +527,7 @@ function updateSidebarTrackHealth(songId, score) {
   const item = document.querySelector(`.sidebar-track[data-id="${songId}"]`);
   if (!item) return;
   const h = item.querySelector('.track-health');
-  h.textContent = score !== 0 ? (score > 0 ? '+' : '') + score : '·';
+  h.textContent = score !== 0 ? (score > 0 ? '+' : '') + score : '\u00b7';
   h.className = 'track-health ' + (score >= 10 ? 'gold' : score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero');
 }
 
@@ -719,20 +648,17 @@ async function initHelix() {
 // HANDLE SPOTIFY CALLBACK (on page load)
 // ====================================================
 (async function boot() {
-  // Check if returning from Spotify auth
   if (window.location.search.includes('code=')) {
     const ok = await handleCallback();
     if (ok) console.log('[Radio] Spotify auth successful');
   }
 
-  // Dev bypass
   if (location.search.includes('skip')) {
     document.getElementById('phase-void').classList.add('hidden');
     initMainInterface();
     return;
   }
 
-  // Normal boot — show the void
   resizeVoidCanvas();
   createStars();
   animateVoid();
