@@ -51,8 +51,10 @@ const BASE_PAIR_COLORS = [
     right: { color: 0x33bbaa, emissive: 0x1a5d55, emInt: 0.7 } },
 ];
 
-// Active rung — bright cyan for the NOW PLAYING visualizer
-const ACTIVE_COLOR = { color: 0x00e5ff, emissive: 0x00aacc, emInt: 3.0 };
+// Active rung — dark fill with neon cyan wireframe outline
+const ACTIVE_BAR_FILL = { color: 0x0a0e2a, emissive: 0x060820, emInt: 0.15 };
+const ACTIVE_EDGE_COLOR = 0x00e5ff;
+const ACTIVE_EDGE_OPACITY = 0.85;
 
 // Strand colors: cyan and a muted blue-violet (not magenta)
 const STRAND_COLORS = {
@@ -74,6 +76,9 @@ let songWaveformBars = [];
 let particleSystem = null;
 let particlePositions = null;
 let particleVelocities = null;
+
+// Audio frequency data — fed from app.js via setAudioData()
+let _audioFreqData = null;  // Float32Array of 0.0-1.0 values, one per frequency bin
 
 let strandPts1 = [];
 let strandPts2 = [];
@@ -197,6 +202,7 @@ export function initDNAHelix(state, callbacks) {
   window.helixSetCurrentTrack = setCurrentTrack;
   window.helixUpdateHealth = updateRungHealth;
   window.helixRebuild = () => { clearHelixMeshes(); buildHelixMeshes(); };
+  window.helixSetAudioData = setAudioData;
 
   requestAnimationFrame(loop);
 }
@@ -351,59 +357,61 @@ function buildHelixMeshes() {
     rungGroup.quaternion.copy(rungQuat);
 
     if (isActive) {
-      // ── ACTIVE RUNG: Audio visualizer bars extending on LOCAL X axis ──
-      // The rung group is rotated so its local Y points along p1→p2 (the rung direction).
-      // We place bars along local Y (across the rung) and scale them on LOCAL X (which
-      // maps to world-space roughly up/down perpendicular to the rung) for the waveform.
+      // ── ACTIVE RUNG: Audio visualizer — top half only ──
+      // Dark fill bars with neon cyan wireframe edges, extending upward (+X in local space).
+      // Thinner and taller than before. Only one direction (no mirror).
       const numBars = CFG.activeWaveformBars;
       const barSpacing = length / (numBars + 1);
-      const barWidth = barSpacing * 0.55;
-      const barDepth = 0.08;
+      const barWidth = barSpacing * 0.35;   // thinner
+      const barDepth = 0.05;                // thinner depth
       const bars = [];
+      const edgeLines = [];
       const baseHeights = [];
 
-      const activeMat = new THREE.MeshPhysicalMaterial({
-        color: ACTIVE_COLOR.color,
-        emissive: ACTIVE_COLOR.emissive,
-        emissiveIntensity: ACTIVE_COLOR.emInt,
-        metalness: 0.5,
-        roughness: 0.1,
-        clearcoat: 1.0,
-        clearcoatRoughness: 0.1,
+      // Dark fill material
+      const fillMat = new THREE.MeshPhysicalMaterial({
+        color: ACTIVE_BAR_FILL.color,
+        emissive: ACTIVE_BAR_FILL.emissive,
+        emissiveIntensity: ACTIVE_BAR_FILL.emInt,
+        metalness: 0.4,
+        roughness: 0.3,
+        transparent: true,
+        opacity: 0.85,
       });
 
-      // Front bars — scale on X (perpendicular to rung, appears as Y in world)
+      // Cyan wireframe edge material
+      const edgeMat = new THREE.LineBasicMaterial({
+        color: ACTIVE_EDGE_COLOR,
+        transparent: true,
+        opacity: ACTIVE_EDGE_OPACITY,
+        linewidth: 1,
+      });
+
+      // Only upward bars (+X direction = top half)
       for (let b = 0; b < numBars; b++) {
-        const barMesh = new THREE.Mesh(barGeom, activeMat.clone());
         const localY = -length / 2 + barSpacing * (b + 1);
         const seed = v * 100 + b;
-        const randH = 0.1 + _seededRandom(seed) * 0.35;
+        const randH = 0.15 + _seededRandom(seed) * 0.5;  // taller range
 
-        // barWidth along Y (across rung), barDepth on Z, randH on X (up/down in world)
+        // Dark fill mesh
+        const barMesh = new THREE.Mesh(barGeom, fillMat.clone());
         barMesh.scale.set(randH, barWidth, barDepth);
-        barMesh.position.set(randH / 2, localY, 0.05);
-
+        barMesh.position.set(randH / 2, localY, 0);
         rungGroup.add(barMesh);
+
+        // Neon cyan edge wireframe
+        const edgeGeom = new THREE.EdgesGeometry(barGeom);
+        const edgeLine = new THREE.LineSegments(edgeGeom, edgeMat.clone());
+        edgeLine.scale.copy(barMesh.scale);
+        edgeLine.position.copy(barMesh.position);
+        rungGroup.add(edgeLine);
+
         bars.push(barMesh);
+        edgeLines.push(edgeLine);
         baseHeights.push(randH);
       }
 
-      // Mirror bars (back side) — extend in -X direction
-      for (let b = 0; b < numBars; b++) {
-        const barMesh = new THREE.Mesh(barGeom, activeMat.clone());
-        const localY = -length / 2 + barSpacing * (b + 1);
-        const seed = v * 100 + b + 50;
-        const randH = 0.1 + _seededRandom(seed) * 0.35;
-
-        barMesh.scale.set(randH, barWidth, barDepth);
-        barMesh.position.set(-randH / 2, localY, -0.05);
-
-        rungGroup.add(barMesh);
-        bars.push(barMesh);
-        baseHeights.push(randH);
-      }
-
-      songWaveformBars.push({ bars, baseHeights, numBars });
+      songWaveformBars.push({ bars, edgeLines, baseHeights, numBars });
 
     } else {
       // ── NON-ACTIVE RUNG: Two-half base pair with gap ──
@@ -473,9 +481,9 @@ function buildHelixMeshes() {
     helixGroup.add(hitMesh);
     songRungHitMeshes.push(hitMesh);
 
-    // Glow overlay — subtle
-    const glowColor = isActive ? 0x00e5ff : _blendPairColor(bpColors);
-    const glowOpacity = isActive ? 0.18 : 0.015;
+    // Glow overlay — subtle; active uses muted version
+    const glowColor = isActive ? 0x0066aa : _blendPairColor(bpColors);
+    const glowOpacity = isActive ? 0.08 : 0.015;
     const rungGlowMat = new THREE.MeshBasicMaterial({
       color: glowColor,
       transparent: true,
@@ -487,20 +495,20 @@ function buildHelixMeshes() {
     helixGroup.add(rungGlowMesh);
     songRungGlows.push(rungGlowMesh);
 
-    // Node spheres — color-matched to strand side
+    // Node spheres — active uses muted dark blue to match visualizer
     const nodeGeom = new THREE.SphereGeometry(CFG.nodeRadius, 12, 12);
     const nodeMat1 = new THREE.MeshPhysicalMaterial({
-      color: isActive ? ACTIVE_COLOR.color : bpColors.left.color,
-      emissive: isActive ? ACTIVE_COLOR.emissive : bpColors.left.emissive,
-      emissiveIntensity: (isActive ? ACTIVE_COLOR.emInt * 0.8 : bpColors.left.emInt) * 0.9,
+      color: isActive ? 0x1a2866 : bpColors.left.color,
+      emissive: isActive ? 0x0a1444 : bpColors.left.emissive,
+      emissiveIntensity: (isActive ? 0.5 : bpColors.left.emInt) * 0.9,
       metalness: 0.6,
       roughness: 0.1,
       clearcoat: 0.5,
     });
     const nodeMat2 = new THREE.MeshPhysicalMaterial({
-      color: isActive ? ACTIVE_COLOR.color : bpColors.right.color,
-      emissive: isActive ? ACTIVE_COLOR.emissive : bpColors.right.emissive,
-      emissiveIntensity: (isActive ? ACTIVE_COLOR.emInt * 0.8 : bpColors.right.emInt) * 0.9,
+      color: isActive ? 0x1a2866 : bpColors.right.color,
+      emissive: isActive ? 0x0a1444 : bpColors.right.emissive,
+      emissiveIntensity: (isActive ? 0.5 : bpColors.right.emInt) * 0.9,
       metalness: 0.6,
       roughness: 0.1,
       clearcoat: 0.5,
@@ -631,7 +639,10 @@ function _createRungMesh(p1, p2, radius, material) {
 function clearHelixMeshes() {
   songRungGroups.forEach(g => {
     g.traverse(child => {
-      if (child.isMesh) { child.geometry.dispose(); child.material.dispose(); }
+      if (child.isMesh || child.isLineSegments) {
+        child.geometry.dispose();
+        child.material.dispose();
+      }
     });
   });
   songRungGroups = [];
@@ -695,40 +706,55 @@ function loop(time) {
     const isActive = v === 0;
 
     if (visible && isActive && songWaveformBars[v]) {
-      // ── AUDIO VISUALIZER — bars extend on X axis (maps to up/down in world) ──
+      // ── AUDIO VISUALIZER — bars extend upward only (+X in local = ~Y in world) ──
       const wb = songWaveformBars[v];
-      for (let b = 0; b < wb.bars.length; b++) {
+      const hasRealData = _audioFreqData && _audioFreqData.length >= wb.numBars;
+
+      for (let b = 0; b < wb.numBars; b++) {
         const bar = wb.bars[b];
+        const edge = wb.edgeLines[b];
         const base = wb.baseHeights[b];
-        const isMirror = b >= wb.numBars;
-        const barIdx = isMirror ? b - wb.numBars : b;
 
-        const centerDist = Math.abs(barIdx - wb.numBars / 2) / (wb.numBars / 2);
-        const bassFreq = 2.0 + centerDist * 1.5;
-        const trebleFreq = 4.0 - centerDist * 2.0;
+        let amplitude;
+        if (hasRealData) {
+          // Map frequency bin to bar index (spread across available bins)
+          const binIdx = Math.floor((b / wb.numBars) * _audioFreqData.length);
+          amplitude = _audioFreqData[binIdx]; // 0.0 — 1.0
+        } else {
+          // Procedural fallback — more organic than before
+          const centerDist = Math.abs(b - wb.numBars / 2) / (wb.numBars / 2);
+          const w1 = Math.abs(Math.sin(fastPulse * (1.8 + centerDist * 1.2) + b * 0.45));
+          const w2 = Math.abs(Math.sin(fastPulse * (3.2 - centerDist * 1.5) + b * 0.8 + 1.1));
+          const w3 = Math.abs(Math.sin(fastPulse * 1.3 + b * 0.25 + 2.0));
+          amplitude = w1 * 0.45 + w2 * 0.35 + w3 * 0.2;
+        }
 
-        const wave1 = Math.abs(Math.sin(fastPulse * bassFreq + barIdx * 0.5));
-        const wave2 = Math.abs(Math.sin(fastPulse * trebleFreq + barIdx * 0.9 + 1.2));
-        const wave3 = Math.abs(Math.sin(fastPulse * 1.5 + barIdx * 0.3));
+        // Taller range: base * 0.15 minimum, up to base * 1.2
+        const newH = base * 0.15 + amplitude * base * 1.05;
 
-        const combined = wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2;
-        const newH = base * 0.2 + combined * 0.45;
-
-        // Scale on X (perpendicular/vertical in world space)
+        // Update fill mesh
         bar.scale.x = newH;
-        bar.position.x = isMirror ? -newH / 2 : newH / 2;
+        bar.position.x = newH / 2;
+
+        // Update edge wireframe to match
+        edge.scale.x = newH;
+        edge.position.x = newH / 2;
+
+        // Subtle edge glow pulse — lower contrast
+        const edgeOpacity = 0.55 + amplitude * 0.35;
+        edge.material.opacity = edgeOpacity;
       }
 
-      // Pulse emissive on active bars
-      const emInt = 2.5 + pulseVal * 1.5;
+      // Subtle emissive pulse on fill (very low — dark bars)
+      const emInt = ACTIVE_BAR_FILL.emInt + pulseVal * 0.08;
       wb.bars.forEach(bar => {
         bar.material.emissiveIntensity = emInt;
       });
     }
 
-    // Pulse active glow
+    // Pulse active glow — much subtler
     if (visible && isActive && songRungGlows[v]) {
-      songRungGlows[v].material.opacity = 0.15 + pulseVal * 0.15;
+      songRungGlows[v].material.opacity = 0.04 + pulseVal * 0.06;
     }
 
     // Label visibility
@@ -1019,4 +1045,12 @@ function setCurrentTrack(index) {
 
 function updateRungHealth(songId, health) {
   // Health system removed for guest view — stub for API compatibility
+}
+
+/**
+ * Feed real-time audio frequency data to the visualizer.
+ * @param {Float32Array|number[]} data — array of 0.0–1.0 values (frequency bins, low→high)
+ */
+function setAudioData(data) {
+  _audioFreqData = data;
 }

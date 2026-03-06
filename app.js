@@ -361,6 +361,9 @@ function playTrackAtIndex(index, seekSeconds) {
 
   markAutoPlayHandled();
 
+  // Start audio analysis for visualizer
+  startVisualizerForTrack(song);
+
   if (state.spotifyAvailable && song.spotifyUri) {
     youtubePlayer.pause();
     spotifyPlay(song.spotifyUri, (seekSeconds || 0) * 1000);
@@ -562,6 +565,108 @@ function updateMobileActiveState(songId) {
   document.querySelectorAll('.mobile-track').forEach(el => {
     el.classList.toggle('active-track', el.dataset.id === songId);
   });
+}
+
+// ====================================================
+// AUDIO VISUALIZER DATA FEED
+// ====================================================
+// Generates frequency-like data for the helix visualizer.
+// When Spotify is playing and we have an auth token, we fetch
+// the Spotify Audio Analysis API for segment loudness data.
+// Otherwise, we generate procedural data synced to playback progress.
+
+let _vizAnalysis = null;  // Spotify audio analysis segments
+let _vizAnimFrame = null;
+const VIZ_BINS = 24;     // must match CFG.activeWaveformBars
+
+async function startVisualizerForTrack(song) {
+  // Cancel any previous visualizer loop
+  if (_vizAnimFrame) { cancelAnimationFrame(_vizAnimFrame); _vizAnimFrame = null; }
+  _vizAnalysis = null;
+
+  // Try to fetch Spotify audio analysis if we have a token and track ID
+  if (song.spotifyUri && getStoredToken()) {
+    const trackId = song.spotifyUri.split(':').pop();
+    try {
+      const token = getStoredToken();
+      const resp = await fetch(`https://api.spotify.com/v1/audio-analysis/${trackId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        _vizAnalysis = data;
+        console.log(`[Viz] Loaded audio analysis for "${song.title}" — ${data.segments?.length || 0} segments`);
+      }
+    } catch (e) {
+      console.warn('[Viz] Audio analysis fetch failed:', e.message);
+    }
+  }
+
+  // Start the visualizer pump
+  pumpVisualizerData();
+}
+
+function pumpVisualizerData() {
+  if (!window.helixSetAudioData) {
+    _vizAnimFrame = requestAnimationFrame(pumpVisualizerData);
+    return;
+  }
+
+  const progress = state.progress || 0;
+  const bins = new Float32Array(VIZ_BINS);
+
+  if (_vizAnalysis && _vizAnalysis.segments && _vizAnalysis.segments.length > 0) {
+    // ── REAL DATA: Map Spotify segments to frequency bins ──
+    const segs = _vizAnalysis.segments;
+
+    // Find the segment at current playback position
+    let segIdx = 0;
+    for (let i = 0; i < segs.length; i++) {
+      if (segs[i].start <= progress) segIdx = i;
+      else break;
+    }
+
+    const seg = segs[segIdx];
+    const nextSeg = segs[Math.min(segIdx + 1, segs.length - 1)];
+
+    // Spotify segments have loudness_max (-60 to 0 dB) and pitches (12 values 0-1)
+    // Map pitches to bins for the "frequency" look
+    const pitches = seg.pitches || new Array(12).fill(0.5);
+    const loudnessNorm = Math.max(0, Math.min(1, (seg.loudness_max + 60) / 60));
+
+    // Interpolation factor within the current segment
+    const segProgress = Math.max(0, Math.min(1, (progress - seg.start) / (seg.duration || 1)));
+
+    // Spread 12 pitches across VIZ_BINS with loudness scaling
+    for (let b = 0; b < VIZ_BINS; b++) {
+      const pitchIdx = (b / VIZ_BINS) * 12;
+      const p0 = Math.floor(pitchIdx);
+      const p1 = Math.min(p0 + 1, 11);
+      const frac = pitchIdx - p0;
+      const pitchVal = pitches[p0] * (1 - frac) + pitches[p1] * frac;
+
+      // Scale by loudness and add some temporal variation
+      const temporal = 0.7 + 0.3 * Math.sin(progress * 4.5 + b * 0.6);
+      bins[b] = pitchVal * loudnessNorm * temporal;
+
+      // Smooth transition toward next segment
+      if (nextSeg && nextSeg.pitches && segProgress > 0.7) {
+        const blendFactor = (segProgress - 0.7) / 0.3;
+        const nextPitch = nextSeg.pitches[p0] * (1 - frac) + nextSeg.pitches[p1] * frac;
+        const nextLoudness = Math.max(0, Math.min(1, (nextSeg.loudness_max + 60) / 60));
+        bins[b] = bins[b] * (1 - blendFactor) + nextPitch * nextLoudness * temporal * blendFactor;
+      }
+    }
+  } else {
+    // ── PROCEDURAL FALLBACK ──
+    // Let helix.js handle its own procedural animation (pass null)
+    window.helixSetAudioData(null);
+    _vizAnimFrame = requestAnimationFrame(pumpVisualizerData);
+    return;
+  }
+
+  window.helixSetAudioData(bins);
+  _vizAnimFrame = requestAnimationFrame(pumpVisualizerData);
 }
 
 // ====================================================
