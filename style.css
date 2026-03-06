@@ -1,5 +1,5 @@
 /* ============================================
-   DNA RADIO // THE SECRET
+   DNA RADIO // WHISPER COLLEGE
    CYBERPUNK MUSIC VISUALIZATION EXPERIENCE
    ============================================ */
 
@@ -42,8 +42,6 @@ html, body {
 
 .hidden { display: none !important; }
 
-/* ---- SCANLINES (removed per user request) ---- */
-
 /* ---- AMBIENT PARTICLES (CSS) ---- */
 #ambient-particles {
   position: fixed;
@@ -61,10 +59,7 @@ html, body {
   animation: float-up linear infinite;
 }
 
-/* ---- Particle shapes ---- */
-.particle-dot {
-  border-radius: 50%;
-}
+.particle-dot { border-radius: 50%; }
 
 .particle-star4 {
   clip-path: polygon(50% 0%, 60% 35%, 100% 50%, 60% 65%, 50% 100%, 40% 65%, 0% 50%, 40% 35%);
@@ -80,7 +75,6 @@ html, body {
   );
 }
 
-/* ---- Particle colors ---- */
 .particle-white {
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 0 3px rgba(255,255,255,0.8), 0 0 7px rgba(255,255,255,0.4);
@@ -128,16 +122,12 @@ html, body {
 #status-bar::after {
   content: '';
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: 0; left: 0; right: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(0,229,255,0.4), transparent);
 }
 
-#status-bar .sep {
-  opacity: 0.4;
-}
+#status-bar .sep { opacity: 0.4; }
 
 /* ============================================
    PHASE 1: THE VOID
@@ -157,91 +147,31 @@ html, body {
   cursor: crosshair;
 }
 
-#void-hint {
-  position: absolute;
-  bottom: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: rgba(0,229,255,0.4);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  animation: pulse-hint 2.5s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes pulse-hint {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.8; }
-}
-
 /* ============================================
-   PHASE 2: VORTEX TRANSITION
+   PHASE: REVEAL (Whisper ~ College)
    ============================================ */
-#phase-vortex {
+#phase-reveal {
   position: fixed;
   inset: 0;
-  z-index: 90;
-  background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 200;
+  background: transparent;
 }
 
-#vortex-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-#vortex-text {
-  position: relative;
-  z-index: 2;
-  text-align: center;
-  pointer-events: none;
-}
-
-#vortex-welcome {
+#reveal-text {
   font-family: var(--font-display);
-  font-size: clamp(48px, 10vw, 120px);
-  font-weight: 800;
-  color: var(--cyan);
-  letter-spacing: 0.3em;
-  text-shadow:
-    0 0 20px rgba(0,229,255,0.8),
-    0 0 60px rgba(0,229,255,0.4),
-    0 0 120px rgba(0,229,255,0.2);
-  opacity: 0;
-  transform: scale(0.9);
-  transition: opacity 1.2s ease, transform 1.2s ease;
-}
-
-#vortex-secret {
-  font-family: var(--font-display);
-  font-size: clamp(24px, 5vw, 56px);
+  font-size: clamp(2rem, 5vw, 4rem);
   font-weight: 300;
-  color: rgba(0,229,255,0.8);
-  letter-spacing: 0.5em;
-  text-transform: uppercase;
-  margin-top: 16px;
-  text-shadow:
-    0 0 15px rgba(0,229,255,0.6),
-    0 0 40px rgba(0,229,255,0.3);
-  opacity: 0;
-  transform: scale(0.95);
-  transition: opacity 1.2s ease 0.3s, transform 1.2s ease 0.3s;
-}
-
-#vortex-welcome.visible,
-#vortex-secret.visible {
-  opacity: 1;
-  transform: scale(1);
+  letter-spacing: 0.15em;
+  color: rgba(200, 220, 255, 0.85);
+  text-shadow: 0 0 30px rgba(0, 229, 255, 0.3), 0 0 60px rgba(0, 229, 255, 0.1);
+  white-space: nowrap;
 }
 
 /* ============================================
-   PHASE 3: MAIN INTERFACE
+   PHASE 2: MAIN INTERFACE
    ============================================ */
 #phase-main {
   position: fixed;
@@ -307,34 +237,32 @@ html, body {
   padding: 3px 8px;
 }
 
-.helix-label.immortal {
-  color: var(--gold) !important;
-  text-shadow:
-    0 0 12px rgba(255,215,0,1),
-    0 0 30px rgba(255,215,0,0.5) !important;
-  background: rgba(255,215,0,0.06);
-}
-
-.helix-label.rejected {
-  color: var(--magenta) !important;
-  text-shadow:
-    0 0 10px rgba(255,0,64,0.8) !important;
-  animation: glitch-text 0.4s steps(2) infinite;
-  background: rgba(255,0,64,0.06);
-}
-
-@keyframes glitch-text {
-  0% { transform: translate(-50%, -50%) translateX(-1px); }
-  50% { transform: translate(-50%, -50%) translateX(1px); }
-  100% { transform: translate(-50%, -50%) translateX(-1px); }
-}
-
-/* CSS2D Data Annotations — floating monospace labels beside helix */
-.helix-annotation {
+/* ---- SIDEBAR TOGGLE BUTTON ---- */
+#sidebar-toggle {
   position: absolute;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  transition: opacity 0.4s ease;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  background: rgba(0,229,255,0.08);
+  border: 1px solid rgba(0,229,255,0.3);
+  border-radius: 4px;
+  color: var(--cyan);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#sidebar-toggle:hover {
+  background: rgba(0,229,255,0.15);
+  box-shadow: 0 0 12px rgba(0,229,255,0.3);
+}
+
+#sidebar-toggle.sidebar-open {
+  right: calc(var(--sidebar-w) + 10px);
 }
 
 /* ---- SIDEBAR ---- */
@@ -348,33 +276,20 @@ html, body {
   -webkit-backdrop-filter: blur(20px);
   border-left: 1px solid rgba(0,229,255,0.15);
   overflow: hidden;
+  transition: width 0.3s ease, opacity 0.3s ease;
 }
 
-#sidebar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1px;
-  height: 100%;
-  background: linear-gradient(180deg, transparent, rgba(0,229,255,0.3), transparent);
-  z-index: 1;
+#sidebar.collapsed {
+  width: 0;
+  opacity: 0;
+  border-left: none;
+  pointer-events: none;
 }
 
 #sidebar-header {
   padding: 14px 16px 10px;
   border-bottom: 1px solid rgba(0,229,255,0.12);
   position: relative;
-}
-
-#sidebar-header::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 16px;
-  right: 16px;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(0,229,255,0.3), transparent);
 }
 
 #sidebar-title {
@@ -456,9 +371,7 @@ html, body {
   border-left: 2px solid transparent;
 }
 
-.sidebar-track:hover {
-  background: rgba(0,229,255,0.07);
-}
+.sidebar-track:hover { background: rgba(0,229,255,0.07); }
 
 .sidebar-track.active-track {
   background: rgba(0,229,255,0.12);
@@ -471,15 +384,6 @@ html, body {
   text-shadow: 0 0 6px rgba(0,229,255,0.4);
 }
 
-.sidebar-track.immortal-track {
-  border-left: 2px solid var(--gold);
-  background: rgba(255,215,0,0.03);
-}
-
-.sidebar-track.rejected-track {
-  opacity: 0.5;
-}
-
 .track-icon {
   flex-shrink: 0;
   width: 22px;
@@ -487,13 +391,7 @@ html, body {
   color: rgba(0,229,255,0.5);
 }
 
-.track-icon.immortal { color: var(--gold); filter: drop-shadow(0 0 4px rgba(255,215,0,0.5)); }
-.track-icon.rejected { color: var(--magenta); }
-
-.track-info {
-  flex: 1;
-  min-width: 0;
-}
+.track-info { flex: 1; min-width: 0; }
 
 .track-title {
   font-family: var(--font-mono);
@@ -529,7 +427,6 @@ html, body {
 .track-health.zero { color: rgba(255,255,255,0.3); }
 .track-health.gold { color: var(--gold); text-shadow: 0 0 8px rgba(255,215,0,0.6); }
 
-/* Drag-over indicator */
 #helix-container.drag-over {
   outline: 2px dashed rgba(0,229,255,0.5);
   outline-offset: -4px;
@@ -556,15 +453,11 @@ html, body {
 #now-playing-hud::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 0; left: 0; right: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(0,229,255,0.5), transparent);
   z-index: 1;
 }
-
-/* Subtle scanline on HUD (removed per user request) */
 
 /* -- HUD LEFT -- */
 #hud-left {
@@ -586,16 +479,6 @@ html, body {
   background: rgba(0,229,255,0.04);
   flex-shrink: 0;
   box-shadow: 0 0 20px rgba(0,229,255,0.12), inset 0 0 10px rgba(0,229,255,0.03);
-  position: relative;
-}
-
-#hud-art::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: 4px;
-  border: 1px solid rgba(0,229,255,0.15);
-  pointer-events: none;
 }
 
 #hud-art svg { width: 30px; height: 30px; }
@@ -627,44 +510,6 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-#hud-health-display {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-#health-label {
-  font-size: 9px;
-  color: rgba(0,229,255,0.4);
-  letter-spacing: 0.1em;
-}
-
-#health-bar-wrap {
-  width: 70px;
-  height: 5px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 3px;
-  overflow: hidden;
-  border: 1px solid rgba(0,229,255,0.1);
-}
-
-#health-bar {
-  height: 100%;
-  width: 50%;
-  background: var(--cyan);
-  border-radius: 3px;
-  transition: width 0.4s ease, background 0.4s ease;
-  box-shadow: 0 0 8px rgba(0,229,255,0.6);
-}
-
-#health-val {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--cyan);
-  min-width: 24px;
 }
 
 /* -- HUD CENTER -- */
@@ -701,7 +546,6 @@ html, body {
 }
 #btn-prev:hover, #btn-next:hover { color: var(--cyan); filter: drop-shadow(0 0 6px rgba(0,229,255,0.5)); }
 
-/* Mute/Unmute button */
 .mute-btn {
   width: 52px;
   height: 52px;
@@ -725,47 +569,6 @@ html, body {
   border-color: rgba(255,0,64,0.5) !important;
   color: var(--magenta) !important;
   box-shadow: 0 0 20px rgba(255,0,64,0.2), inset 0 0 10px rgba(255,0,64,0.05) !important;
-}
-
-/* Vote buttons */
-.vote-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50% !important;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.vote-btn svg { width: 18px; height: 18px; }
-
-.vote-btn.reject {
-  background: rgba(255,0,64,0.06) !important;
-  border: 2px solid rgba(255,0,64,0.4) !important;
-  color: var(--magenta) !important;
-  box-shadow: 0 0 14px rgba(255,0,64,0.15) !important;
-}
-
-.vote-btn.reject:hover {
-  background: rgba(255,0,64,0.15) !important;
-  box-shadow: 0 0 28px rgba(255,0,64,0.5) !important;
-  transform: scale(1.1);
-}
-
-.vote-btn.accept {
-  background: rgba(0,255,136,0.06) !important;
-  border: 2px solid rgba(0,255,136,0.4) !important;
-  color: var(--green) !important;
-  box-shadow: 0 0 14px rgba(0,255,136,0.15) !important;
-}
-
-.vote-btn.accept:hover {
-  background: rgba(0,255,136,0.15) !important;
-  box-shadow: 0 0 28px rgba(0,255,136,0.5) !important;
-  transform: scale(1.1);
-}
-
-.vote-btn.voted {
-  opacity: 0.35;
-  cursor: not-allowed;
 }
 
 /* Progress bar */
@@ -815,10 +618,23 @@ html, body {
   transition: left 0.5s linear;
 }
 
-#hud-vote-display {
+#hud-source-display {
   font-size: 10px;
   color: rgba(0,229,255,0.4);
   letter-spacing: 0.1em;
+}
+
+#source-status {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+#source-status.source-spotify {
+  color: rgba(30,215,96,0.6);
+}
+
+#source-status.source-youtube {
+  color: rgba(255,60,60,0.5);
 }
 
 /* -- HUD RIGHT -- */
@@ -879,107 +695,40 @@ html, body {
   min-width: 24px;
 }
 
-#radio-stream-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-}
-
-#radio-label {
-  font-size: 9px;
-  color: rgba(0,229,255,0.3);
-  letter-spacing: 0.1em;
-}
-
-.radio-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: rgba(0,229,255,0.05) !important;
-  border: 1px solid rgba(0,229,255,0.2) !important;
-  border-radius: 3px !important;
-  color: rgba(0,229,255,0.6) !important;
-  padding: 4px 8px !important;
-  font-size: 9px !important;
-  font-family: var(--font-mono) !important;
-  cursor: pointer;
-  transition: all 0.15s;
-  letter-spacing: 0.1em;
-}
-
-.radio-btn svg { width: 14px; height: 14px; }
-.radio-btn:hover { background: rgba(0,229,255,0.12) !important; border-color: rgba(0,229,255,0.4) !important; }
-.radio-btn.active { color: var(--cyan) !important; border-color: var(--cyan) !important; box-shadow: 0 0 10px rgba(0,229,255,0.3) !important; }
-
-.spotify-btn {
-  background: rgba(30,215,96,0.06) !important;
-  border: 1px solid rgba(30,215,96,0.25) !important;
-  border-radius: 3px !important;
-  color: #1ed760 !important;
-  padding: 6px 12px !important;
-  font-size: 10px !important;
-  font-family: var(--font-mono) !important;
-  letter-spacing: 0.1em !important;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.spotify-btn:hover { background: rgba(30,215,96,0.12) !important; box-shadow: 0 0 12px rgba(30,215,96,0.3) !important; }
-
-/* Spotify connected state: green dot indicator */
-.spotify-btn.spotify-connected {
-  border-color: rgba(30,215,96,0.6) !important;
-  box-shadow: 0 0 10px rgba(30,215,96,0.25) !important;
-}
-
-.spotify-btn.spotify-connected::before {
+/* Corner decorations */
+#phase-main::before {
   content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #1ed760;
-  box-shadow: 0 0 6px rgba(30,215,96,0.9), 0 0 12px rgba(30,215,96,0.4);
-  margin-right: 5px;
-  vertical-align: middle;
-  animation: spotify-dot-pulse 2s ease-in-out infinite;
+  position: absolute;
+  top: 0; left: 0;
+  width: 40px; height: 40px;
+  border-top: 1px solid rgba(0,229,255,0.3);
+  border-left: 1px solid rgba(0,229,255,0.3);
+  pointer-events: none;
+  z-index: 10;
 }
 
-@keyframes spotify-dot-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(30,215,96,0.9), 0 0 12px rgba(30,215,96,0.4); }
-  50% { opacity: 0.7; box-shadow: 0 0 10px rgba(30,215,96,1), 0 0 20px rgba(30,215,96,0.6); }
-}
-
-/* Audio source indicator in HUD vote display */
-#audio-source-indicator {
-  font-size: 9px;
-  color: rgba(0,229,255,0.35);
-  letter-spacing: 0.12em;
-  margin-left: 8px;
-}
-
-#audio-source-indicator.source-spotify {
-  color: rgba(30,215,96,0.5);
-}
-
-#audio-source-indicator.source-youtube {
-  color: rgba(255,0,0,0.4);
-}
-
-/* Spotify widget */
-#spotify-widget {
+/* Toast */
+#inject-toast {
   position: fixed;
-  bottom: calc(var(--hud-h) + 8px);
-  right: 16px;
-  width: 300px;
-  z-index: 600;
-  border: 1px solid rgba(30,215,96,0.3);
-  border-radius: 6px;
-  overflow: hidden;
-  box-shadow: 0 0 24px rgba(30,215,96,0.2);
-  background: #000;
+  top: calc(var(--status-h) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.92);
+  border: 1px solid var(--cyan);
+  border-radius: 3px;
+  padding: 10px 24px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 0.1em;
+  box-shadow: 0 0 24px rgba(0,229,255,0.35);
+  z-index: 5000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
 }
+
+#inject-toast.show { opacity: 1; }
 
 /* ============================================
    MOBILE VIEW
@@ -1075,6 +824,7 @@ html, body {
   :root { --hud-h: 120px; }
 
   #sidebar { display: none; }
+  #sidebar-toggle { display: none; }
   #helix-container { display: none; }
   #mobile-list-view { display: flex; }
 
@@ -1087,136 +837,7 @@ html, body {
 
   #hud-left { display: none; }
   #hud-right { min-width: unset; }
-
   #hud-center { width: 100%; }
   #hud-controls { gap: 12px; }
-
   #hud-progress-wrap { max-width: 100%; }
-
-  #spotify-widget { width: calc(100% - 32px); right: 16px; }
-}
-
-/* ============================================
-   PARTICLES / EFFECTS (CSS fallbacks)
-   ============================================ */
-@keyframes float-particle {
-  0% { transform: translateY(0) scale(1); opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { transform: translateY(-80px) scale(0.5); opacity: 0; }
-}
-
-/* Vote feedback flash */
-@keyframes vote-flash-accept {
-  0% { box-shadow: 0 0 0px rgba(0,255,136,0); }
-  50% { box-shadow: 0 0 60px rgba(0,255,136,0.5), inset 0 0 30px rgba(0,255,136,0.1); }
-  100% { box-shadow: 0 0 0px rgba(0,255,136,0); }
-}
-
-@keyframes vote-flash-reject {
-  0% { box-shadow: 0 0 0px rgba(255,0,64,0); }
-  50% { box-shadow: 0 0 60px rgba(255,0,64,0.5), inset 0 0 30px rgba(255,0,64,0.1); }
-  100% { box-shadow: 0 0 0px rgba(255,0,64,0); }
-}
-
-.flash-accept { animation: vote-flash-accept 0.6s ease; }
-.flash-reject { animation: vote-flash-reject 0.6s ease; }
-
-/* Drag ghost */
-.drag-ghost {
-  position: fixed;
-  pointer-events: none;
-  z-index: 9998;
-  background: rgba(0,0,0,0.9);
-  border: 1px solid var(--cyan);
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cyan);
-  box-shadow: 0 0 16px rgba(0,229,255,0.4);
-  white-space: nowrap;
-  opacity: 0.9;
-}
-
-/* Queue injection notification */
-#inject-toast {
-  position: fixed;
-  top: calc(var(--status-h) + 16px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.92);
-  border: 1px solid var(--cyan);
-  border-radius: 3px;
-  padding: 10px 24px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cyan);
-  letter-spacing: 0.1em;
-  box-shadow: 0 0 24px rgba(0,229,255,0.35), inset 0 0 10px rgba(0,229,255,0.05);
-  z-index: 5000;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-#inject-toast.show { opacity: 1; }
-
-/* Corner decorations on main interface */
-#phase-main::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 40px;
-  height: 40px;
-  border-top: 1px solid rgba(0,229,255,0.3);
-  border-left: 1px solid rgba(0,229,255,0.3);
-  pointer-events: none;
-  z-index: 10;
-}
-
-#phase-main::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: var(--sidebar-w);
-  width: 40px;
-  height: 40px;
-  border-top: 1px solid rgba(0,229,255,0.15);
-  border-right: 1px solid rgba(0,229,255,0.15);
-  pointer-events: none;
-  z-index: 10;
-}
-
-/* ---- PHASE: REVEAL (Whisper ~ College) ---- */
-#phase-reveal {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  background: transparent;
-}
-
-#reveal-text {
-  font-family: var(--font-display);
-  font-size: clamp(2rem, 5vw, 4rem);
-  font-weight: 300;
-  letter-spacing: 0.15em;
-  color: rgba(200, 220, 255, 0.85);
-  text-shadow: 0 0 30px rgba(0, 229, 255, 0.3), 0 0 60px rgba(0, 229, 255, 0.1);
-  white-space: nowrap;
-}
-
-/* ---- HELIX ANNOTATION (v11) ---- */
-.helix-annotation {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  color: rgba(0,229,255,0.45);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  pointer-events: none;
-  white-space: nowrap;
-  text-shadow: 0 0 6px rgba(0,229,255,0.3);
 }

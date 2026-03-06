@@ -18,7 +18,7 @@
   }
   </script>
 
-  <link rel="stylesheet" href="style.css?v=14" />
+  <link rel="stylesheet" href="style.css?v=15" />
 </head>
 <body>
 
@@ -55,15 +55,20 @@
       <div id="css2d-layer"></div>
     </div>
 
-    <!-- LIBRARY SIDEBAR -->
-    <aside id="sidebar">
+    <!-- SIDEBAR TOGGLE -->
+    <button id="sidebar-toggle" title="Toggle library" aria-label="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+
+    <!-- LIBRARY SIDEBAR (collapsed by default) -->
+    <aside id="sidebar" class="collapsed">
       <div id="sidebar-header">
         <div id="sidebar-title">WHISPER COLLEGE</div>
         <div id="sidebar-count"><span id="song-count">50</span> TRACKS</div>
       </div>
       <div id="sidebar-search-wrap">
         <input type="text" id="sidebar-search" placeholder="SEARCH TRACKS..." autocomplete="off" />
-        <span id="search-icon">⌕</span>
+        <span id="search-icon">&#x2315;</span>
       </div>
       <div id="sidebar-list"></div>
     </aside>
@@ -81,11 +86,7 @@
         <div id="hud-song-info">
           <div id="hud-title">TUNING IN...</div>
           <div id="hud-artist">WHISPER COLLEGE RADIO</div>
-          <div id="hud-health-display">
-            <span id="health-label">HEALTH</span>
-            <span id="health-bar-wrap"><span id="health-bar"></span></span>
-            <span id="health-val">0</span>
-          </div>
+  
         </div>
       </div>
 
@@ -94,16 +95,12 @@
           <button id="btn-prev" title="Previous" aria-label="Previous track">
             <svg viewBox="0 0 24 24" fill="none"><path d="M6 6h2v12H6V6zm3.5 6L18 6v12L9.5 12z" fill="currentColor"/></svg>
           </button>
-          <button id="btn-reject" title="Reject" aria-label="Reject song" class="vote-btn reject">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-          </button>
+
           <button id="btn-mute" title="Mute/Unmute" aria-label="Mute or unmute" class="mute-btn">
             <svg id="unmuted-icon" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.54 8.46a5 5 0 010 7.07" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19.07 4.93a10 10 0 010 14.14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             <svg id="muted-icon" viewBox="0 0 24 24" fill="none" class="hidden"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           </button>
-          <button id="btn-accept" title="Accept" aria-label="Accept song" class="vote-btn accept">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/></svg>
-          </button>
+
           <button id="btn-next" title="Next" aria-label="Next track">
             <svg viewBox="0 0 24 24" fill="none"><path d="M18 6h-2v12h2V6zM14.5 12L6 6v12l8.5-6z" fill="currentColor"/></svg>
           </button>
@@ -116,8 +113,8 @@
           </div>
           <span id="hud-time-total">0:00</span>
         </div>
-        <div id="hud-vote-display">
-          <span id="vote-status">TUNING IN...</span>
+        <div id="hud-source-display">
+          <span id="source-status">TUNING IN...</span>
         </div>
       </div>
 
@@ -127,9 +124,7 @@
           <input type="range" id="volume-slider" min="0" max="100" value="65" />
           <span id="vol-val">65</span>
         </div>
-        <div id="spotify-toggle-wrap">
-          <button id="btn-spotify-toggle" class="spotify-btn" title="Audio source">▶ YOUTUBE → CONNECT SPOTIFY</button>
-        </div>
+
       </div>
     </div>
 
@@ -147,7 +142,7 @@
   <!-- HIDDEN YOUTUBE PLAYER -->
   <div id="yt-player-container" style="position:fixed;bottom:0;left:0;width:320px;height:180px;opacity:0.01;pointer-events:none;z-index:-1;"></div>
 
-  <script src="app.js?v=14" type="module"></script>
+  <script src="app.js?v=15" type="module"></script>
 
 </body>
 </html>
