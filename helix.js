@@ -78,13 +78,28 @@ let particleVelocities = null;
 let strandPts1 = [];
 let strandPts2 = [];
 
-let appState, onTrackSelectCb;
+let appState, onTrackSelectCb, onTrackReorderCb;
 let rotationAngle = 0;
 let scrollOffset = 0;
 let scrollTarget = 0;
 let lastTime = 0;
 let animRAF;
 let activeRungPulse = 0;
+
+// ── Drag-and-drop state ──────────────────────────────────────────────────────
+const drag = {
+  active: false,
+  holdTimer: null,
+  startMouse: null,
+  fromQueueIdx: -1,
+  fromVisualIdx: -1,
+  ghostLabel: null,
+  dropIndicator: null,
+  dropVisualIdx: -1,   // visual index of the drop target slot
+  pointerDown: false,
+};
+const HOLD_MS = 300;  // ms before drag activates
+const DRAG_DEAD_ZONE = 6; // pixels before we consider it a drag move
 
 // Seeded random for deterministic heights
 function _seededRandom(seed) {
@@ -96,6 +111,7 @@ function _seededRandom(seed) {
 export function initDNAHelix(state, callbacks) {
   appState = state;
   onTrackSelectCb = callbacks.onTrackSelect;
+  onTrackReorderCb = callbacks.onTrackReorder || null;
 
   const container = document.getElementById('helix-container');
   if (!container) return;
@@ -171,7 +187,11 @@ export function initDNAHelix(state, callbacks) {
   scrollOffset = scrollTarget;
 
   container.addEventListener('wheel', onWheel, { passive: false });
-  container.addEventListener('click', onHelixClick);
+  // Replace simple click with pointer event system for hold-to-drag
+  container.addEventListener('pointerdown', onPointerDown);
+  container.addEventListener('pointermove', onPointerMove);
+  container.addEventListener('pointerup', onPointerUp);
+  container.addEventListener('pointercancel', onPointerCancel);
   window.addEventListener('resize', onResize);
 
   window.helixSetCurrentTrack = setCurrentTrack;
@@ -766,21 +786,216 @@ function onWheel(e) {
   scrollTarget = Math.max(-3, Math.min(scrollTarget, maxScroll));
 }
 
-function onHelixClick(e) {
+// ── Pointer event system (hold-to-drag + click-to-play) ──────────────────────
+function _raycastHit(clientX, clientY) {
   const container = document.getElementById('helix-container');
   const rect = container.getBoundingClientRect();
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2(
-    ((e.clientX - rect.left) / rect.width) * 2 - 1,
-    -((e.clientY - rect.top) / rect.height) * 2 + 1
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1
   );
   raycaster.setFromCamera(mouse, camera);
-
   const hits = raycaster.intersectObjects(songRungHitMeshes);
-  if (hits.length > 0) {
-    const idx = hits[0].object.userData.songIndex;
-    if (idx !== undefined && onTrackSelectCb) onTrackSelectCb(idx);
+  if (hits.length > 0) return hits[0].object.userData;
+  return null;
+}
+
+function _getDropVisualIdx(clientY) {
+  // Convert screen Y to a visual index position in the helix
+  const container = document.getElementById('helix-container');
+  const rect = container.getBoundingClientRect();
+  const ndc_y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  // Unproject to get approximate world Y
+  const vec = new THREE.Vector3(0, ndc_y, 0.5).unproject(camera);
+  const worldY = vec.y;
+  // helixGroup.position.y offsets the helix
+  const localY = worldY - helixGroup.position.y;
+  // rungY(v) = -v * CFG.rungSpacing  →  v = -localY / rungSpacing
+  const rawV = -localY / CFG.rungSpacing;
+  // Clamp to [1, queueLen] — can't drop at position 0 (active/now-playing)
+  const clamped = Math.max(1, Math.min(Math.round(rawV), appState.queue.length - 1));
+  return clamped;
+}
+
+function _createGhostLabel(song) {
+  const el = document.createElement('div');
+  el.className = 'helix-label helix-label-ghost';
+  el.textContent = `${song.title}  ·  ${song.artist}`;
+  el.style.pointerEvents = 'none';
+  // Position via fixed CSS (follows mouse)
+  el.style.position = 'fixed';
+  el.style.zIndex = '9999';
+  document.body.appendChild(el);
+  return el;
+}
+
+function _createDropIndicator() {
+  const el = document.createElement('div');
+  el.className = 'helix-drop-indicator';
+  el.style.display = 'none';
+  const container = document.getElementById('helix-container');
+  container.appendChild(el);
+  return el;
+}
+
+function _updateDropIndicator(visualIdx) {
+  if (!drag.dropIndicator) return;
+  // Position the CSS indicator at the world-space Y of the drop slot
+  const y = rungY(visualIdx);
+  const worldPos = new THREE.Vector3(0, y + helixGroup.position.y, 0);
+  const screenPos = worldPos.clone().project(camera);
+  const container = document.getElementById('helix-container');
+  const rect = container.getBoundingClientRect();
+  const screenY = (-screenPos.y * 0.5 + 0.5) * rect.height;
+  drag.dropIndicator.style.display = 'block';
+  drag.dropIndicator.style.top = screenY + 'px';
+}
+
+function _cleanupDrag() {
+  if (drag.holdTimer) { clearTimeout(drag.holdTimer); drag.holdTimer = null; }
+  if (drag.ghostLabel) { drag.ghostLabel.remove(); drag.ghostLabel = null; }
+  if (drag.dropIndicator) { drag.dropIndicator.remove(); drag.dropIndicator = null; }
+  drag.active = false;
+  drag.pointerDown = false;
+  drag.fromQueueIdx = -1;
+  drag.fromVisualIdx = -1;
+  drag.dropVisualIdx = -1;
+  drag.startMouse = null;
+  // Re-enable label pointer events
+  const container = document.getElementById('helix-container');
+  if (container) container.style.cursor = '';
+}
+
+function onPointerDown(e) {
+  // Only primary button
+  if (e.button !== 0) return;
+  drag.pointerDown = true;
+  drag.startMouse = { x: e.clientX, y: e.clientY };
+
+  const hit = _raycastHit(e.clientX, e.clientY);
+  if (!hit) return;
+
+  const visualIdx = hit.visualIndex;
+  const queueIdx = hit.songIndex;
+
+  // Don't allow dragging the currently playing song (visual index 0)
+  if (visualIdx === 0) {
+    // Will still fire as a click on pointerup
+    return;
   }
+
+  // Start hold timer for drag
+  drag.holdTimer = setTimeout(() => {
+    // Activate drag mode
+    drag.active = true;
+    drag.fromQueueIdx = queueIdx;
+    drag.fromVisualIdx = visualIdx;
+
+    const song = appState.queue[queueIdx];
+    drag.ghostLabel = _createGhostLabel(song);
+    drag.ghostLabel.style.left = e.clientX + 12 + 'px';
+    drag.ghostLabel.style.top = e.clientY - 16 + 'px';
+
+    drag.dropIndicator = _createDropIndicator();
+
+    const container = document.getElementById('helix-container');
+    if (container) container.style.cursor = 'grabbing';
+
+    // Highlight source rung
+    if (songRungGroups[visualIdx]) {
+      songRungGroups[visualIdx].traverse(child => {
+        if (child.isMesh && child.material && child.material.opacity !== undefined) {
+          child.material._origOpacity = child.material.opacity;
+          child.material.opacity *= 0.4;
+          child.material.transparent = true;
+        }
+      });
+    }
+    if (rungLabels[visualIdx]) {
+      rungLabels[visualIdx].element.classList.add('dragging');
+    }
+  }, HOLD_MS);
+}
+
+function onPointerMove(e) {
+  if (!drag.pointerDown) return;
+
+  // If not yet dragging, check dead zone
+  if (!drag.active && drag.startMouse) {
+    const dx = e.clientX - drag.startMouse.x;
+    const dy = e.clientY - drag.startMouse.y;
+    if (Math.sqrt(dx * dx + dy * dy) > DRAG_DEAD_ZONE) {
+      // Moved too far before hold timer — cancel hold, treat as scroll/other
+      if (drag.holdTimer) { clearTimeout(drag.holdTimer); drag.holdTimer = null; }
+    }
+  }
+
+  if (!drag.active) return;
+
+  // Update ghost position
+  if (drag.ghostLabel) {
+    drag.ghostLabel.style.left = e.clientX + 12 + 'px';
+    drag.ghostLabel.style.top = e.clientY - 16 + 'px';
+  }
+
+  // Update drop indicator
+  const dropV = _getDropVisualIdx(e.clientY);
+  drag.dropVisualIdx = dropV;
+  _updateDropIndicator(dropV);
+}
+
+function onPointerUp(e) {
+  if (!drag.pointerDown) return;
+
+  if (drag.holdTimer) { clearTimeout(drag.holdTimer); drag.holdTimer = null; }
+
+  if (drag.active) {
+    // ── DRAG COMPLETE — fire reorder ──
+    if (drag.dropVisualIdx >= 1 && drag.dropVisualIdx !== drag.fromVisualIdx) {
+      const toQueueIdx = visualToQueue(drag.dropVisualIdx);
+      if (onTrackReorderCb) {
+        onTrackReorderCb(drag.fromQueueIdx, toQueueIdx);
+      }
+    } else {
+      // Restore source rung opacity if no-op
+      if (songRungGroups[drag.fromVisualIdx]) {
+        songRungGroups[drag.fromVisualIdx].traverse(child => {
+          if (child.isMesh && child.material && child.material._origOpacity !== undefined) {
+            child.material.opacity = child.material._origOpacity;
+            delete child.material._origOpacity;
+          }
+        });
+      }
+      if (rungLabels[drag.fromVisualIdx]) {
+        rungLabels[drag.fromVisualIdx].element.classList.remove('dragging');
+      }
+    }
+    _cleanupDrag();
+  } else {
+    // ── SHORT TAP — treat as click to play ──
+    const hit = _raycastHit(e.clientX, e.clientY);
+    if (hit && hit.songIndex !== undefined && onTrackSelectCb) {
+      onTrackSelectCb(hit.songIndex);
+    }
+    _cleanupDrag();
+  }
+}
+
+function onPointerCancel() {
+  // Restore any source rung opacity
+  if (drag.active && drag.fromVisualIdx >= 0 && songRungGroups[drag.fromVisualIdx]) {
+    songRungGroups[drag.fromVisualIdx].traverse(child => {
+      if (child.isMesh && child.material && child.material._origOpacity !== undefined) {
+        child.material.opacity = child.material._origOpacity;
+        delete child.material._origOpacity;
+      }
+    });
+    if (rungLabels[drag.fromVisualIdx]) {
+      rungLabels[drag.fromVisualIdx].element.classList.remove('dragging');
+    }
+  }
+  _cleanupDrag();
 }
 
 function onResize() {

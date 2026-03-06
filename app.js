@@ -254,7 +254,7 @@ async function initMainInterface() {
   buildSidebar();
   buildMobileList();
   setupHUD();
-  setupDragDrop();
+  setupSidebarDrag();
 
   // Show main UI immediately so it's visible even if audio init takes time
   setTimeout(() => { mainEl.style.opacity = '1'; }, 50);
@@ -486,7 +486,6 @@ function buildSidebar() {
     item.className = 'sidebar-track';
     item.dataset.id = song.id;
     item.dataset.idx = idx;
-    item.draggable = true;
     const score = song.health || 0;
     item.innerHTML = `
       <svg class="track-icon" viewBox="0 0 16 16" fill="none">
@@ -499,12 +498,10 @@ function buildSidebar() {
       </div>
       <div class="track-health ${score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero'}">${score !== 0 ? (score > 0 ? '+' : '') + score : '\u00b7'}</div>
     `;
-    item.addEventListener('click', () => playTrackManual(idx));
-    item.addEventListener('dragstart', e => {
-      e.dataTransfer.setData('text/plain', JSON.stringify({ songId: song.id, songIdx: idx }));
-      item.style.opacity = '0.5';
+    item.addEventListener('click', () => {
+      // Only fire click if sidebar drag is NOT active
+      if (!sidebarDragState.active) playTrackManual(idx);
     });
-    item.addEventListener('dragend', () => { item.style.opacity = '1'; });
     list.appendChild(item);
   });
   document.getElementById('sidebar-search').addEventListener('input', e => {
@@ -568,28 +565,189 @@ function updateMobileActiveState(songId) {
 }
 
 // ====================================================
-// DRAG & DROP
+// QUEUE REORDER (used by helix drag-drop & sidebar drag)
 // ====================================================
-function setupDragDrop() {
-  const hc = document.getElementById('helix-container');
-  if (!hc) return;
-  hc.addEventListener('dragover', e => { e.preventDefault(); hc.classList.add('drag-over'); });
-  hc.addEventListener('dragleave', () => hc.classList.remove('drag-over'));
-  hc.addEventListener('drop', e => {
-    e.preventDefault(); hc.classList.remove('drag-over');
-    try {
-      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-      const song = state.queue.find(s => s.id === data.songId);
-      if (!song) return;
-      const insertAt = state.currentIndex + 1;
-      const existing = state.queue.findIndex(s => s.id === data.songId);
-      if (existing !== -1) state.queue.splice(existing, 1);
-      state.queue.splice(insertAt, 0, song);
-      if (window.helixRebuild) window.helixRebuild();
-      buildSidebar();
-      showToast(`INJECTED: ${song.title}`);
-    } catch(e) {}
+function reorderQueue(fromQueueIdx, toQueueIdx) {
+  // Protect the currently playing song
+  if (fromQueueIdx === state.currentIndex) return;
+
+  const qLen = state.queue.length;
+  if (fromQueueIdx < 0 || fromQueueIdx >= qLen) return;
+  if (toQueueIdx < 0 || toQueueIdx >= qLen) return;
+  if (fromQueueIdx === toQueueIdx) return;
+
+  // Don't allow dropping onto the currently playing slot
+  if (toQueueIdx === state.currentIndex) return;
+
+  const song = state.queue[fromQueueIdx];
+
+  // Remove from old position
+  state.queue.splice(fromQueueIdx, 1);
+
+  // Adjust currentIndex if needed after removal
+  let newCurrent = state.currentIndex;
+  if (fromQueueIdx < newCurrent) {
+    newCurrent--;
+  }
+
+  // Adjust toQueueIdx after removal
+  let insertAt = toQueueIdx;
+  if (fromQueueIdx < toQueueIdx) {
+    insertAt--;
+  }
+
+  // Insert at new position
+  state.queue.splice(insertAt, 0, song);
+
+  // Adjust currentIndex if needed after insertion
+  if (insertAt <= newCurrent) {
+    newCurrent++;
+  }
+  state.currentIndex = newCurrent;
+
+  // Rebuild everything
+  if (window.helixRebuild) window.helixRebuild();
+  buildSidebar();
+  updateSidebarActiveState(state.queue[state.currentIndex].id);
+  showToast(`MOVED: ${song.title}`);
+  console.log(`[Radio] Reordered: "${song.title}" from ${fromQueueIdx} to ${insertAt}`);
+}
+
+// ====================================================
+// SIDEBAR DRAG-TO-REORDER
+// ====================================================
+let sidebarDragState = {
+  active: false,
+  sourceEl: null,
+  sourceIdx: -1,
+  ghostEl: null,
+  placeholderEl: null,
+  startY: 0,
+};
+
+function setupSidebarDrag() {
+  const list = document.getElementById('sidebar-list');
+  if (!list) return;
+
+  list.addEventListener('pointerdown', onSidebarPointerDown);
+  list.addEventListener('pointermove', onSidebarPointerMove);
+  list.addEventListener('pointerup', onSidebarPointerUp);
+  list.addEventListener('pointercancel', cleanupSidebarDrag);
+}
+
+function onSidebarPointerDown(e) {
+  const track = e.target.closest('.sidebar-track');
+  if (!track) return;
+  const idx = parseInt(track.dataset.idx, 10);
+  // Don't allow reordering the active song
+  if (idx === state.currentIndex) return;
+
+  sidebarDragState.startY = e.clientY;
+  sidebarDragState.sourceEl = track;
+  sidebarDragState.sourceIdx = idx;
+}
+
+function onSidebarPointerMove(e) {
+  if (!sidebarDragState.sourceEl) return;
+
+  // Activate after 8px of movement
+  if (!sidebarDragState.active) {
+    if (Math.abs(e.clientY - sidebarDragState.startY) < 8) return;
+    sidebarDragState.active = true;
+
+    // Create ghost
+    const ghost = sidebarDragState.sourceEl.cloneNode(true);
+    ghost.className = 'sidebar-track sidebar-drag-ghost';
+    ghost.style.position = 'fixed';
+    ghost.style.width = sidebarDragState.sourceEl.offsetWidth + 'px';
+    ghost.style.zIndex = '9999';
+    ghost.style.pointerEvents = 'none';
+    document.body.appendChild(ghost);
+    sidebarDragState.ghostEl = ghost;
+
+    // Dim source
+    sidebarDragState.sourceEl.style.opacity = '0.3';
+  }
+
+  if (!sidebarDragState.active) return;
+
+  // Position ghost
+  sidebarDragState.ghostEl.style.left = sidebarDragState.sourceEl.getBoundingClientRect().left + 'px';
+  sidebarDragState.ghostEl.style.top = (e.clientY - 20) + 'px';
+
+  // Find drop target by scanning sidebar tracks
+  const list = document.getElementById('sidebar-list');
+  const tracks = Array.from(list.querySelectorAll('.sidebar-track'));
+
+  // Remove old indicators
+  tracks.forEach(t => {
+    t.classList.remove('drag-above', 'drag-below');
   });
+
+  for (const t of tracks) {
+    const rect = t.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      t.classList.add('drag-above');
+      break;
+    } else if (e.clientY >= midY && e.clientY <= rect.bottom) {
+      t.classList.add('drag-below');
+      break;
+    }
+  }
+}
+
+function onSidebarPointerUp(e) {
+  if (!sidebarDragState.active) {
+    cleanupSidebarDrag();
+    return;
+  }
+
+  // Determine target index
+  const list = document.getElementById('sidebar-list');
+  const tracks = Array.from(list.querySelectorAll('.sidebar-track'));
+  let targetIdx = sidebarDragState.sourceIdx;
+
+  for (let i = 0; i < tracks.length; i++) {
+    const rect = tracks[i].getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const tIdx = parseInt(tracks[i].dataset.idx, 10);
+    if (e.clientY < midY) {
+      targetIdx = tIdx;
+      break;
+    }
+    // If we passed all tracks, drop at end
+    if (i === tracks.length - 1) {
+      targetIdx = tIdx + 1;
+      if (targetIdx >= state.queue.length) targetIdx = state.queue.length - 1;
+    }
+  }
+
+  // Don't drop onto the currently playing track
+  if (targetIdx === state.currentIndex) {
+    cleanupSidebarDrag();
+    return;
+  }
+
+  if (targetIdx !== sidebarDragState.sourceIdx) {
+    reorderQueue(sidebarDragState.sourceIdx, targetIdx);
+  }
+
+  cleanupSidebarDrag();
+}
+
+function cleanupSidebarDrag() {
+  if (sidebarDragState.ghostEl) {
+    sidebarDragState.ghostEl.remove();
+  }
+  if (sidebarDragState.sourceEl) {
+    sidebarDragState.sourceEl.style.opacity = '';
+  }
+  // Remove indicators
+  document.querySelectorAll('.sidebar-track').forEach(t => {
+    t.classList.remove('drag-above', 'drag-below');
+  });
+  sidebarDragState = { active: false, sourceEl: null, sourceIdx: -1, ghostEl: null, placeholderEl: null, startY: 0 };
 }
 
 // ====================================================
@@ -637,7 +795,10 @@ createAmbientParticles();
 async function initHelix() {
   try {
     const { initDNAHelix } = await import('./helix.js');
-    initDNAHelix(state, { onTrackSelect: (idx) => playTrackManual(idx) });
+    initDNAHelix(state, {
+      onTrackSelect: (idx) => playTrackManual(idx),
+      onTrackReorder: (fromIdx, toIdx) => reorderQueue(fromIdx, toIdx),
+    });
     window.helixInitialized = true;
   } catch(e) {
     console.warn('[Radio] Helix init failed:', e.message);

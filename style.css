@@ -432,6 +432,67 @@ html, body {
   outline-offset: -4px;
 }
 
+/* ---- HELIX DRAG & DROP ---- */
+.helix-label.dragging {
+  opacity: 0.3 !important;
+  filter: grayscale(0.5);
+}
+
+.helix-label-ghost {
+  background: rgba(0,229,255,0.15) !important;
+  border: 1px solid rgba(0,229,255,0.6) !important;
+  color: var(--cyan) !important;
+  font-weight: 500;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 3px;
+  white-space: nowrap;
+  opacity: 0.85;
+  box-shadow: 0 0 16px rgba(0,229,255,0.4), 0 2px 8px rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transform: none !important;
+  text-shadow: 0 0 8px rgba(0,229,255,0.6);
+}
+
+.helix-drop-indicator {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  box-shadow: 0 0 12px rgba(0,229,255,0.6), 0 0 4px rgba(0,229,255,0.8);
+  pointer-events: none;
+  z-index: 100;
+  transition: top 0.12s ease-out;
+}
+
+/* ---- SIDEBAR DRAG & DROP ---- */
+.sidebar-drag-ghost {
+  opacity: 0.85 !important;
+  background: rgba(0,229,255,0.12) !important;
+  border: 1px solid rgba(0,229,255,0.5) !important;
+  border-left: 2px solid var(--cyan) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 10px rgba(0,229,255,0.3);
+  border-radius: 3px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.sidebar-track.drag-above {
+  border-top: 2px solid var(--cyan) !important;
+  box-shadow: 0 -2px 8px rgba(0,229,255,0.4);
+}
+
+.sidebar-track.drag-below {
+  border-bottom: 2px solid var(--cyan) !important;
+  box-shadow: 0 2px 8px rgba(0,229,255,0.4);
+}
+
+.sidebar-track.active-track {
+  cursor: default;
+}
+
 /* ============================================
    NOW PLAYING HUD
    ============================================ */
