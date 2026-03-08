@@ -432,6 +432,53 @@ html, body {
   outline-offset: -4px;
 }
 
+.queue-add-panel,
+.mobile-add-panel {
+  padding: 14px 16px 18px;
+  border-top: 1px solid rgba(0,229,255,0.08);
+  background: rgba(0,229,255,0.03);
+}
+
+.queue-add-title {
+  font-size: 10px;
+  color: rgba(0,229,255,0.6);
+  letter-spacing: 0.16em;
+  margin-bottom: 10px;
+}
+
+.queue-add-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.queue-add-form input {
+  width: 100%;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(0,229,255,0.18);
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.queue-add-form button {
+  background: linear-gradient(90deg, rgba(0,229,255,0.14), rgba(116,92,255,0.18));
+  color: var(--cyan);
+  border: 1px solid rgba(0,229,255,0.28);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.queue-add-form button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 /* ---- HELIX DRAG & DROP ---- */
 .helix-label.dragging {
   opacity: 0.3 !important;
@@ -571,6 +618,15 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+#station-mode,
+#mobile-station-mode {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(255,255,255,0.58);
+  letter-spacing: 0.08em;
+  margin-top: 2px;
 }
 
 /* -- HUD CENTER -- */
@@ -791,6 +847,19 @@ html, body {
 
 #inject-toast.show { opacity: 1; }
 
+#site-credit {
+  position: fixed;
+  right: 12px;
+  bottom: calc(var(--hud-h) + 12px);
+  z-index: 20;
+}
+
+#site-credit a {
+  font-size: 11px;
+  color: rgba(255,255,255,0.48);
+  text-decoration: none;
+}
+
 /* ============================================
    MOBILE VIEW
    ============================================ */
@@ -807,9 +876,14 @@ html, body {
   font-weight: 700;
   color: var(--cyan);
   letter-spacing: 0.2em;
-  padding: 16px;
+  padding: 16px 16px 6px;
   border-bottom: 1px solid rgba(0,229,255,0.15);
   text-shadow: 0 0 10px rgba(0,229,255,0.5);
+}
+
+#mobile-station-mode {
+  padding: 0 16px 12px;
+  border-bottom: 1px solid rgba(0,229,255,0.08);
 }
 
 #mobile-search-wrap {
@@ -882,7 +956,7 @@ html, body {
    RESPONSIVE
    ============================================ */
 @media (max-width: 768px) {
-  :root { --hud-h: 120px; }
+  :root { --hud-h: 136px; }
 
   #sidebar { display: none; }
   #sidebar-toggle { display: none; }
@@ -896,9 +970,24 @@ html, body {
     gap: 6px;
   }
 
-  #hud-left { display: none; }
+  #hud-left {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  #hud-art { display: none; }
   #hud-right { min-width: unset; }
   #hud-center { width: 100%; }
   #hud-controls { gap: 12px; }
   #hud-progress-wrap { max-width: 100%; }
+  #hud-title, #hud-artist, #station-mode {
+    max-width: min(92vw, 340px);
+    text-align: center;
+  }
+
+  #site-credit {
+    bottom: calc(var(--hud-h) + 10px);
+  }
 }

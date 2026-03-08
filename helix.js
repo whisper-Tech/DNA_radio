@@ -15,22 +15,22 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 const CFG = {
-  helixRadius: 1.6,
+  helixRadius: 1.58,
   rungSpacing: 0.72,
   rotationPerUnit: 0.22,
   visibleRungs: 20,
-  rotationSpeed: (Math.PI * 2) / 150,
-  strandThickness: 0.055,
+  rotationSpeed: (Math.PI * 2) / 240,
+  strandThickness: 0.038,
   basePairGap: 0.12,
   basePairHeight: 0.08,
   activeWaveformBars: 24,
   particleCount: 140,
-  bloomStrength: 0.65,        // toned down from 0.9
-  bloomRadius: 0.3,           // toned down from 0.35
-  bloomThreshold: 0.3,        // raised from 0.2 — less stuff blooms
-  glowTubeRadius: 0.18,       // toned down from 0.22
-  nodeRadius: 0.10,
-  tubeRadialSegments: 12,     // up from 8 — smoother tubes
+  bloomStrength: 0.58,
+  bloomRadius: 0.24,
+  bloomThreshold: 0.34,
+  glowTubeRadius: 0.058,
+  nodeRadius: 0.072,
+  tubeRadialSegments: 12,
 };
 
 // ── DNA Base-Pair Neon Color Palette ──────────────────────────────────────────
@@ -306,22 +306,48 @@ function buildHelixMeshes() {
     new THREE.TubeGeometry(curve2, tubeSeg, CFG.strandThickness, CFG.tubeRadialSegments, false), strandMat2
   ));
 
-  // Glow tubes — subtle
+  // Glow tubes — much slimmer so the backbone reads as structure, not padding
   const glowMat1 = new THREE.MeshBasicMaterial({
     color: STRAND_COLORS.strand1.color,
-    transparent: true, opacity: 0.05,
+    transparent: true, opacity: 0.012,
     blending: THREE.AdditiveBlending, depthWrite: false,
   });
   const glowMat2 = new THREE.MeshBasicMaterial({
     color: STRAND_COLORS.strand2.color,
-    transparent: true, opacity: 0.05,
+    transparent: true, opacity: 0.012,
     blending: THREE.AdditiveBlending, depthWrite: false,
   });
   helixGroup.add(new THREE.Mesh(
-    new THREE.TubeGeometry(curve1, Math.floor(tubeSeg * 0.6), CFG.glowTubeRadius, 8, false), glowMat1
+    new THREE.TubeGeometry(curve1, Math.floor(tubeSeg * 0.75), CFG.glowTubeRadius, 8, false), glowMat1
   ));
   helixGroup.add(new THREE.Mesh(
-    new THREE.TubeGeometry(curve2, Math.floor(tubeSeg * 0.6), CFG.glowTubeRadius, 8, false), glowMat2
+    new THREE.TubeGeometry(curve2, Math.floor(tubeSeg * 0.75), CFG.glowTubeRadius, 8, false), glowMat2
+  ));
+
+  // Thin edge rails add crisp definition without bringing back the bulky halo
+  const railMat1 = new THREE.LineBasicMaterial({
+    color: 0xa8f7ff,
+    transparent: true,
+    opacity: 0.54,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const railMat2 = new THREE.LineBasicMaterial({
+    color: 0xc6b2ff,
+    transparent: true,
+    opacity: 0.4,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const railCurvePts1 = curve1.getPoints(Math.max(Math.floor(tubeSeg * 0.9), 140));
+  const railCurvePts2 = curve2.getPoints(Math.max(Math.floor(tubeSeg * 0.9), 140));
+  helixGroup.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(railCurvePts1),
+    railMat1
+  ));
+  helixGroup.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(railCurvePts2),
+    railMat2
   ));
 
   // ── SONG RUNGS — base pairs or audio visualizer ─────────────────────

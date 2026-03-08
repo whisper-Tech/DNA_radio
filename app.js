@@ -1,78 +1,35 @@
 /**
- * DNA RADIO // WHISPER COLLEGE — v15
- * 24/7 Clockwork Radio + Spotify Primary + YouTube Fallback
- * No backend required. No auth gate.
+ * DNA RADIO // WHISPER COLLEGE — v16
+ * Shared family station + Spotify primary + YouTube fallback
  */
 
-import { ClockworkRadio } from './radio.js';
 import {
-  getStoredToken, handleCallback, startSpotifyAuth, initSpotifyPlayer,
-  spotifyPlay, spotifyPause, spotifyResume, spotifySeek, spotifySetVolume,
-  isSpotifyReady, clearTokens, markAutoPlayHandled,
+  getStoredToken, handleCallback, initSpotifyPlayer,
+  spotifyPlay, spotifyPause, spotifySeek, spotifySetVolume,
+  clearTokens, markAutoPlayHandled,
 } from './spotify-auth.js';
 import { youtubePlayer } from './youtube.js';
+import { PLAYLIST } from './playlist-data.js';
+
+const META_API_BASE = document.querySelector('meta[name="dna-radio-api-base"]')?.getAttribute('content')?.trim() || '';
+const WINDOW_API_BASE = typeof window !== 'undefined' && typeof window.DNA_RADIO_API_BASE === 'string'
+  ? window.DNA_RADIO_API_BASE.trim()
+  : '';
+const PLACEHOLDER_API_BASE = new URL('__PORT_3001__/', window.location.href).toString().replace(/\/$/, '');
+const SAME_ORIGIN_API_BASE = window.location.origin;
+const API_BASE = (WINDOW_API_BASE || META_API_BASE || PLACEHOLDER_API_BASE || SAME_ORIGIN_API_BASE).replace(/\/$/, '');
+const HAS_SHARED_BACKEND = Boolean(WINDOW_API_BASE || META_API_BASE || !PLACEHOLDER_API_BASE.includes('__PORT_3001__'));
+
+const sharedSync = {
+  socket: null,
+  pollTimer: null,
+  reconnectTimer: null,
+  lastQueueSignature: '',
+};
 
 // ====================================================
 // PLAYLIST DATA
 // ====================================================
-const PLAYLIST = [
-  { id:"s1",  title:"All Your Exes",                         artist:"Julia Michaels",                              health:0, youtubeId:"REKWd0u7YgU", spotifyUri:"spotify:track:4kMgpLBKVRmQE0MRRQDKNA", duration:189 },
-  { id:"s2",  title:"Find Me",                               artist:"Nate Mitchell",                               health:0, youtubeId:"Adgm-MlnB3Y", duration:210 },
-  { id:"s3",  title:"ANGELS LIKE ME",                        artist:"Ryan Oakes, SkyDxddy",                        health:0, youtubeId:"kTrPxxOp4Gw", duration:195 },
-  { id:"s4",  title:"Apathy Anthem",                         artist:"MaeThePirate",                                health:0, youtubeId:"5jARpPOVrCY", duration:200 },
-  { id:"s5",  title:"Alien (Sped Up)",                       artist:"Nico & Chelsea",                              health:0, youtubeId:"1iL3mZLazt0", duration:165 },
-  { id:"s6",  title:"I HOPE YOUR CAR BREAKS DOWN",           artist:"MaeThePirate",                                health:0, youtubeId:"a5p5ZSTHinw", duration:180 },
-  { id:"s7",  title:"Talking To A Ghost",                    artist:"YOUTHYEAR",                                   health:0, youtubeId:"kZHKdeqTuug", duration:210 },
-  { id:"s8",  title:"Best Part Of The Story",                artist:"SkyDxddy",                                    health:0, youtubeId:"4Av1L5Rmoj0", duration:200 },
-  { id:"s9",  title:"God Of War",                            artist:"SkyDxddy",                                    health:0, youtubeId:"isvwPvc6Dqk", duration:195 },
-  { id:"s10", title:"SNAP",                                  artist:"Rosa Linn",                                   health:0, youtubeId:"Lo4_K4relMg", spotifyUri:"spotify:track:4CsGPRKLjR2VHXFE6gHIQp", duration:178 },
-  { id:"s11", title:"kill the girl",                         artist:"L\u00d8L\u00d8",                                        health:0, youtubeId:"zmH7PJiR2yk", duration:190 },
-  { id:"s12", title:"5,6,7,8",                               artist:"L\u00d8L\u00d8, girlfriends",                           health:0, youtubeId:"NVOhlLfcQ7U", duration:185 },
-  { id:"s13", title:"It Wasn't Easy To Be Happy For You",    artist:"The Lumineers",                               health:0, youtubeId:"eGReASgVM1Q", spotifyUri:"spotify:track:3l2NQJS9LK87ChVVMVSxD7", duration:222 },
-  { id:"s14", title:"What's Stopping You",                   artist:"P!X!E",                                       health:0, youtubeId:"o1wxgIps1e4", duration:195 },
-  { id:"s15", title:"WATCH THIS",                            artist:"TAELA",                                       health:0, youtubeId:"iycrMFBrnsg", duration:180 },
-  { id:"s16", title:"If I Died Last Night",                  artist:"Jessie Murph",                                health:0, youtubeId:"pRtO5vlJnWw", spotifyUri:"spotify:track:7G5M0duiNDVuHDKmFqjlqf", duration:200 },
-  { id:"s17", title:"People That I Love Leave",              artist:"Cassadee Pope",                               health:0, youtubeId:"eEF8T2F92AE", duration:210 },
-  { id:"s18", title:"Starduhst",                             artist:"honestav",                                    health:0, youtubeId:"3O-2kCcI-hg", duration:185 },
-  { id:"s19", title:"Bullet",                                artist:"Hollywood Undead",                            health:0, youtubeId:"lP077RitNAc", spotifyUri:"spotify:track:0tJ9xhZIAICAjJuNal9hAK", duration:216 },
-  { id:"s20", title:"Such Small Hands",                      artist:"La Dispute",                                  health:0, youtubeId:"XlppZKMYNys", spotifyUri:"spotify:track:1K3lbDfFMPB6pQDQbMHJPe", duration:135 },
-  { id:"s21", title:"Sara",                                  artist:"We Three",                                    health:0, youtubeId:"IlvELjeisqE", duration:245 },
-  { id:"s22", title:"HELLO L\u00d8NELINESS",                      artist:"Ekoh, L\u00f8 Spirit",                             health:0, youtubeId:"wAtFJAqTVhA", duration:200 },
-  { id:"s23", title:"Lilith",                                artist:"Halsey",                                      health:0, youtubeId:"9PdH-zavwO4", spotifyUri:"spotify:track:4OF29bVGvMgEKsBqvYCGhb", duration:195 },
-  { id:"s24", title:"007",                                   artist:"L\u00d8L\u00d8",                                        health:0, youtubeId:"4okJouEbZ_s", duration:180 },
-  { id:"s25", title:"GrokBlocked",                           artist:"Pie For Billy",                               health:0, youtubeId:"gGcKxx0yvfE", duration:210 },
-  { id:"s26", title:"Mud",                                   artist:"CARR",                                        health:0, youtubeId:"g9X2aSt15jQ", duration:200 },
-  { id:"s27", title:"Enemy",                                 artist:"Arrested Youth",                              health:0, youtubeId:"z3PXjKxEkjo", duration:190 },
-  { id:"s28", title:"Panic Room",                            artist:"Au/Ra",                                       health:0, youtubeId:"Ro51SuLyh8A", spotifyUri:"spotify:track:3SBqFkXIaKv10AAj8bJUGP", duration:189 },
-  { id:"s29", title:"Dominoes",                              artist:"Ren",                                         health:0, youtubeId:"bbbjWEnC3Gc", duration:240 },
-  { id:"s30", title:"Full Circle",                           artist:"Movements",                                   health:0, youtubeId:"nVKzdqvfjO8", duration:210 },
-  { id:"s31", title:"All Around Me",                         artist:"Flyleaf",                                     health:0, youtubeId:"xN0FFK8JSYE", spotifyUri:"spotify:track:5KR1fUFJJPMQ60XPoLr2tN", duration:215 },
-  { id:"s32", title:"Medusa",                                artist:"Cameron Whitcomb",                            health:0, youtubeId:"KNE8o4gK_y0", duration:200 },
-  { id:"s33", title:"Dopamine",                              artist:"Sum 41",                                      health:0, youtubeId:"yYk2BTwuQnM", duration:195 },
-  { id:"s34", title:"Anxiety",                               artist:"Bmike",                                       health:0, youtubeId:"KhnEUbbMWUM", duration:210 },
-  { id:"s35", title:"Teenage Dirtbag",                       artist:"Postmodern Jukebox, Jax",                     health:0, youtubeId:"Snh-ufvXWIk", duration:230 },
-  { id:"s36", title:"I Dare You",                            artist:"Shinedown",                                   health:0, youtubeId:"R5kaDyq41qw", spotifyUri:"spotify:track:3lSOmfRVVP6fRImEaZkJBi", duration:215 },
-  { id:"s37", title:"Baby Don't Cut (Acoustic)",             artist:"Bmike",                                       health:0, youtubeId:"0Dr0ibhVs0I", duration:240 },
-  { id:"s38", title:"Freckles",                              artist:"honestav",                                    health:0, youtubeId:"BM8y6sVVH2E", duration:185 },
-  { id:"s39", title:"The Other Side",                        artist:"Michael Marcagi",                             health:0, youtubeId:"TuQ4im63cMY", duration:195 },
-  { id:"s40", title:"HORROR SHOW",                           artist:"Hot Milk",                                    health:0, youtubeId:"OBZ84gQlBtc", duration:200 },
-  { id:"s41", title:"BLOSSOM",                               artist:"R\u00d8RY",                                        health:0, youtubeId:"Ya8dZyiD2gE", duration:190 },
-  { id:"s42", title:"For the Misfits",                       artist:"SkyDxddy",                                    health:0, youtubeId:"WurYAHXEMXQ", duration:200 },
-  { id:"s43", title:"Dear Diary",                            artist:"KidShazam, SkyDxddy, PONS",                   health:0, youtubeId:"IGgxRH7B86M", duration:210 },
-  { id:"s44", title:"Angel of Death",                        artist:"SkyDxddy",                                    health:0, youtubeId:"-_GBaVjCsOc", duration:195 },
-  { id:"s45", title:"i like the way you kiss me",            artist:"Artemas",                                     health:0, youtubeId:"evJ6gX1lp2o", spotifyUri:"spotify:track:5W1XY5ucNATjTVLMDpGGig", duration:138 },
-  { id:"s46", title:"You Are Enough",                        artist:"Citizen Soldier",                             health:0, youtubeId:"rZLVIVByZn8", duration:225 },
-  { id:"s47", title:"Psycho",                                artist:"Taylor Acorn",                                health:0, youtubeId:"iOVGmrypaAE", duration:190 },
-  { id:"s48", title:"cinderella's dead",                     artist:"EMELINE",                                     health:0, youtubeId:"Tf7qp1CwanI", spotifyUri:"spotify:track:6IQBJpLSJBHGKKkSladarQ", duration:180 },
-  { id:"s49", title:"For a Pessimist, I'm Pretty Optimistic",artist:"Paramore",                                   health:0, youtubeId:"B1o2UCLvD38", spotifyUri:"spotify:track:3qhlB30KknSejmIvZFLlEi", duration:229 },
-  { id:"s50", title:"Weightless",                            artist:"All Time Low",                                health:0, youtubeId:"TpG3BxRctQ4", spotifyUri:"spotify:track:2uFaJJtFpPDc5Pa95XzTvg", duration:195 },
-];
-
-// ====================================================
-// CLOCKWORK RADIO
-// ====================================================
-const radio = new ClockworkRadio(PLAYLIST);
-
 // ====================================================
 // APP STATE
 // ====================================================
@@ -87,7 +44,14 @@ const state = {
   duration: 0,
   audioSource: 'none',
   spotifyAvailable: false,
+  stationReady: false,
+  serverTimeOffset: 0,
+  currentSongStartTime: 0,
+  listenerCount: 0,
+  playbackMode: HAS_SHARED_BACKEND ? 'shared' : 'local',
 };
+
+let _playRequestToken = 0;
 
 // ====================================================
 // STATUS BAR CLOCK
@@ -255,23 +219,19 @@ async function initMainInterface() {
   buildMobileList();
   setupHUD();
   setupSidebarDrag();
+  setupAddSongForms();
+  updateStationMeta();
 
-  // Show main UI immediately so it's visible even if audio init takes time
   setTimeout(() => { mainEl.style.opacity = '1'; }, 50);
 
-  // Init audio (may take time for Spotify SDK)
   await initAudio();
+  await initStationSync();
 
-  // Sync to clockwork radio
-  syncToRadio();
-
-  // Now init helix AFTER currentIndex is set by syncToRadio
   if (window.innerWidth > 768) {
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     initHelix();
   }
 
-  // Toast container
   if (!document.getElementById('inject-toast')) {
     const toast = document.createElement('div');
     toast.id = 'inject-toast';
@@ -335,66 +295,313 @@ function handleYouTubeState(ytState) {
 }
 
 function handleTrackEnd() {
-  console.log('[Radio] Track ended, advancing to next');
+  console.log('[Radio] Track ended');
+  if (HAS_SHARED_BACKEND) {
+    requestStationAction('/api/next', { expectedStartTime: state.currentSongStartTime }).catch(err => {
+      console.warn('[Radio] Shared next-track request failed:', err.message);
+    });
+    return;
+  }
   const next = (state.currentIndex + 1) % state.queue.length;
   playTrackAtIndex(next, 0);
 }
 
 // ====================================================
-// CLOCKWORK SYNC
+// SHARED STATION SYNC
 // ====================================================
-function syncToRadio() {
-  const now = radio.getNow();
-  const song = now.track;
-  const seekSec = now.positionSeconds;
-  console.log(`[Radio] Initial sync: "${song.title}" at ${Math.floor(seekSec)}s`);
-  playTrackAtIndex(now.trackIndex, seekSec);
+async function initStationSync() {
+  if (HAS_SHARED_BACKEND) {
+    await fetchStationSync(true);
+    connectSharedStream();
+    if (!sharedSync.pollTimer) {
+      sharedSync.pollTimer = setInterval(() => {
+        fetchStationSync(false).catch(() => {});
+      }, 15000);
+    }
+    return;
+  }
+
+  state.stationReady = true;
+  state.currentSongStartTime = Date.now();
+  await playTrackAtIndex(0, 0, { localOnly: true, forceRestart: true });
 }
 
-function playTrackAtIndex(index, seekSeconds) {
-  state.currentIndex = index;
-  const song = state.queue[index];
+async function fetchStationSync(forcePlay = false) {
+  const res = await fetch(`${API_BASE}/api/sync`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Sync failed (${res.status})`);
+  const syncState = await res.json();
+  await applySharedState(syncState, { forcePlay });
+}
+
+function connectSharedStream() {
+  if (!HAS_SHARED_BACKEND || sharedSync.stream) return;
+  const stream = new EventSource(`${API_BASE}/api/events`);
+  sharedSync.stream = stream;
+
+  stream.addEventListener('state_update', async (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      await applySharedState(payload, { forcePlay: false });
+    } catch (err) {
+      console.warn('[Radio] Shared update parse failed:', err.message);
+    }
+  });
+
+  stream.onerror = () => {
+    updateStationMeta('Reconnecting');
+  };
+
+  stream.onopen = () => {
+    updateStationMeta();
+  };
+}
+
+function normalizeDurationSeconds(rawDuration) {
+  const value = Number(rawDuration || 0);
+  if (!value) return 210;
+  return value > 1000 ? Math.round(value / 1000) : Math.round(value);
+}
+
+function normalizeTrack(song, idx = 0) {
+  const fallback = PLAYLIST.find(item => item.id === song.id)
+    || PLAYLIST.find(item => item.title === song.title && item.artist === song.artist)
+    || {};
+
+  return {
+    ...fallback,
+    ...song,
+    id: song.id || fallback.id || `shared_${idx}`,
+    title: song.title || fallback.title || 'Unknown Track',
+    artist: song.artist || fallback.artist || 'Unknown Artist',
+    spotifyUri: song.spotifyUri || song.uri || fallback.spotifyUri || null,
+    youtubeId: song.youtubeId || fallback.youtubeId || null,
+    duration: normalizeDurationSeconds(song.duration || fallback.duration),
+    health: Number(song.health || fallback.health || 0),
+  };
+}
+
+function queueSignature(queue) {
+  return queue.map(song => `${song.id}|${song.title}|${song.artist}`).join('||');
+}
+
+function getTargetSeekSeconds(syncState) {
+  const serverNow = Date.now() + state.serverTimeOffset;
+  if (syncState.isPlaying === false) {
+    return Math.max(0, (syncState.currentPosition || 0) / 1000);
+  }
+  return Math.max(0, (serverNow - (syncState.songStartTime || serverNow)) / 1000);
+}
+
+async function applySharedState(syncState, { forcePlay = false } = {}) {
+  if (!syncState) return;
+
+  if (typeof syncState.serverTime === 'number') {
+    state.serverTimeOffset = syncState.serverTime - Date.now();
+  }
+
+  const nextQueue = (syncState.playlist || syncState.queue || state.queue).map(normalizeTrack);
+  const nextSignature = queueSignature(nextQueue);
+  const queueChanged = nextSignature !== sharedSync.lastQueueSignature;
+  state.queue = nextQueue;
+  sharedSync.lastQueueSignature = nextSignature;
+
+  if (queueChanged) {
+    buildSidebar();
+    buildMobileList();
+    setupAddSongForms();
+    if (window.helixRebuild) window.helixRebuild();
+  }
+
+  state.listenerCount = Number(syncState.listenerCount || 0);
+  state.isPlaying = syncState.isPlaying !== false;
+  state.currentSongStartTime = syncState.songStartTime || Date.now();
+
+  const nextIndex = Math.max(0, Math.min(Number(syncState.currentIndex || 0), Math.max(state.queue.length - 1, 0)));
+  const nextSong = state.queue[nextIndex];
+  if (!nextSong) return;
+
+  const targetSeek = Math.min(getTargetSeekSeconds(syncState), nextSong.duration || 210);
+  const indexChanged = state.currentIndex !== nextIndex;
+  const drift = Math.abs((state.progress || 0) - targetSeek);
+
+  state.currentIndex = nextIndex;
+  updateHUDForTrack(nextSong);
+  updateSidebarActiveState(nextSong.id);
+  updateMobileActiveState(nextSong.id);
+  updateStationMeta();
+
+  if (window.helixSetCurrentTrack && (indexChanged || forcePlay || !state.stationReady)) {
+    window.helixSetCurrentTrack(nextIndex);
+  }
+
+  if (!state.stationReady || indexChanged || forcePlay || drift > 2.5) {
+    await playTrackAtIndex(nextIndex, targetSeek, { localOnly: true, forceRestart: true });
+  } else if (drift > 1.2) {
+    if (state.audioSource === 'spotify') spotifySeek(targetSeek * 1000);
+    else youtubePlayer.seek(targetSeek);
+    state.progress = targetSeek;
+    updateProgressUI();
+  }
+
+  if (!state.isPlaying) {
+    if (state.audioSource === 'spotify') spotifyPause();
+    else youtubePlayer.pause();
+  }
+
+  state.stationReady = true;
+}
+
+async function requestStationAction(path, body = {}) {
+  if (!HAS_SHARED_BACKEND) return null;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+  const payload = await res.json().catch(() => null);
+  if (payload) {
+    await applySharedState(payload, { forcePlay: true });
+  }
+  return payload;
+}
+
+async function resolveSpotifyUri(song) {
+  if (!song) return null;
+  if (song.spotifyUri) {
+    song._spotifyUriResolved = true;
+    return song.spotifyUri;
+  }
+  if (song._spotifyUriResolved) return null;
+
+  const token = getStoredToken();
+  if (!token) return null;
+
+  try {
+    const query = `track:${song.title} artist:${song.artist}`;
+    const url = `https://api.spotify.com/v1/search?${new URLSearchParams({
+      q: query,
+      type: 'track',
+      limit: '3',
+    }).toString()}`;
+    const resp = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    if (!resp.ok) {
+      if (resp.status === 401) clearTokens();
+      return null;
+    }
+
+    const data = await resp.json();
+    const items = data?.tracks?.items || [];
+    const exactish = items.find(item => {
+      const itemTitle = (item.name || '').toLowerCase().trim();
+      const itemArtists = (item.artists || []).map(a => (a.name || '').toLowerCase());
+      return itemTitle === song.title.toLowerCase().trim()
+        && itemArtists.some(name => name.includes(song.artist.toLowerCase().split(',')[0].trim()));
+    });
+    const winner = exactish || items[0] || null;
+    if (winner?.uri) {
+      song.spotifyUri = winner.uri;
+      song._spotifyUriResolved = true;
+      return winner.uri;
+    }
+  } catch (e) {
+    console.warn(`[Radio] Spotify URI lookup failed for "${song.title}":`, e.message);
+  }
+
+  song._spotifyUriResolved = true;
+  return null;
+}
+
+async function playTrackAtIndex(index, seekSeconds, options = {}) {
+  const { localOnly = false, forceRestart = false } = options;
+  const playToken = ++_playRequestToken;
+  const normalizedIndex = Math.max(0, Math.min(index, state.queue.length - 1));
+  const song = state.queue[normalizedIndex];
+  if (!song) return;
+
+  const sameTrack = state.currentIndex === normalizedIndex;
+  state.currentIndex = normalizedIndex;
+  state.progress = seekSeconds || 0;
+  state.duration = song.duration || state.duration;
+
   updateHUDForTrack(song);
   updateSidebarActiveState(song.id);
   updateMobileActiveState(song.id);
-  if (window.helixSetCurrentTrack) window.helixSetCurrentTrack(index);
+  if (window.helixSetCurrentTrack && (!sameTrack || forceRestart || !state.stationReady)) {
+    window.helixSetCurrentTrack(normalizedIndex);
+  }
 
   markAutoPlayHandled();
 
-  // Start audio analysis for visualizer
-  startVisualizerForTrack(song);
-
-  if (state.spotifyAvailable && song.spotifyUri) {
-    youtubePlayer.pause();
-    spotifyPlay(song.spotifyUri, (seekSeconds || 0) * 1000);
-    if (state.audioSource !== 'spotify') {
-      state.audioSource = 'spotify';
-      updateSourceIndicator('SPOTIFY');
-    }
-  } else {
-    if (state.spotifyAvailable) {
-      spotifyPause();
-    }
-    youtubePlayer.play(song.youtubeId, seekSeconds || 0);
-    if (state.audioSource !== 'youtube') {
-      state.audioSource = 'youtube';
-      updateSourceIndicator('YOUTUBE (fallback)');
-    }
+  if (state.spotifyAvailable) {
+    await resolveSpotifyUri(song);
+    if (playToken !== _playRequestToken) return;
   }
+
+  if (!sameTrack || forceRestart || !state.stationReady) {
+    startVisualizerForTrack(song);
+
+    if (state.spotifyAvailable && song.spotifyUri) {
+      youtubePlayer.pause();
+      await spotifyPlay(song.spotifyUri, (seekSeconds || 0) * 1000);
+      if (state.audioSource !== 'spotify') {
+        state.audioSource = 'spotify';
+        updateSourceIndicator('SPOTIFY');
+      }
+    } else {
+      if (state.spotifyAvailable) {
+        spotifyPause();
+      }
+      youtubePlayer.play(song.youtubeId, seekSeconds || 0);
+      if (state.audioSource !== 'youtube') {
+        state.audioSource = 'youtube';
+        updateSourceIndicator('YOUTUBE (fallback)');
+      }
+    }
+  } else if ((seekSeconds || 0) >= 0) {
+    if (state.audioSource === 'spotify') spotifySeek((seekSeconds || 0) * 1000);
+    else youtubePlayer.seek(seekSeconds || 0);
+  }
+
   state.isPlaying = true;
+  updateProgressUI();
+
+  if (!localOnly && HAS_SHARED_BACKEND) {
+    state.currentSongStartTime = Date.now() + state.serverTimeOffset - ((seekSeconds || 0) * 1000);
+  }
+  state.stationReady = true;
 }
 
-function playNext() {
+async function playNext() {
+  if (HAS_SHARED_BACKEND) {
+    await requestStationAction('/api/next', { expectedStartTime: state.currentSongStartTime });
+    return;
+  }
   const next = (state.currentIndex + 1) % state.queue.length;
   playTrackAtIndex(next, 0);
 }
 
-function playPrev() {
+async function playPrev() {
+  if (HAS_SHARED_BACKEND) {
+    const prev = (state.currentIndex - 1 + state.queue.length) % state.queue.length;
+    await requestStationAction('/api/play', { index: prev });
+    return;
+  }
   const prev = (state.currentIndex - 1 + state.queue.length) % state.queue.length;
   playTrackAtIndex(prev, 0);
 }
 
-function playTrackManual(index) {
+async function playTrackManual(index) {
+  if (HAS_SHARED_BACKEND) {
+    await requestStationAction('/api/play', { index });
+    return;
+  }
   playTrackAtIndex(index, 0);
 }
 
@@ -403,8 +610,8 @@ function playTrackManual(index) {
 // ====================================================
 function setupHUD() {
   document.getElementById('btn-mute').addEventListener('click', toggleMute);
-  document.getElementById('btn-prev').addEventListener('click', playPrev);
-  document.getElementById('btn-next').addEventListener('click', playNext);
+  document.getElementById('btn-prev').addEventListener('click', () => { playPrev().catch(err => console.warn(err)); });
+  document.getElementById('btn-next').addEventListener('click', () => { playNext().catch(err => console.warn(err)); });
   document.getElementById('volume-slider').addEventListener('input', () => {
     const val = parseInt(document.getElementById('volume-slider').value);
     document.getElementById('vol-val').textContent = val;
@@ -414,11 +621,17 @@ function setupHUD() {
   document.getElementById('hud-progress-bar').addEventListener('click', e => {
     const rect = e.currentTarget.getBoundingClientRect();
     const frac = (e.clientX - rect.left) / rect.width;
-    if (state.audioSource === 'spotify') spotifySeek(frac * state.duration * 1000);
-    else youtubePlayer.seek(frac * state.duration);
+    const targetSeconds = frac * state.duration;
+    if (HAS_SHARED_BACKEND) {
+      requestStationAction('/api/seek', { seconds: targetSeconds }).catch(err => {
+        console.warn('[Radio] Shared seek failed:', err.message);
+      });
+      return;
+    }
+    if (state.audioSource === 'spotify') spotifySeek(targetSeconds * 1000);
+    else youtubePlayer.seek(targetSeconds);
   });
 
-  // Sidebar toggle
   const sidebarToggle = document.getElementById('sidebar-toggle');
   if (sidebarToggle) {
     sidebarToggle.addEventListener('click', () => {
@@ -433,7 +646,7 @@ function updateHUDForTrack(song) {
   document.getElementById('hud-title').textContent = song.title;
   document.getElementById('hud-artist').textContent = song.artist;
   document.getElementById('hud-time-cur').textContent = '0:00';
-  document.getElementById('hud-time-total').textContent = '0:00';
+  document.getElementById('hud-time-total').textContent = formatTime(song.duration || state.duration || 0);
   const ss = document.getElementById('source-status');
   if (ss) {
     ss.textContent = state.audioSource === 'spotify' ? '\u266b SPOTIFY' : '\u25b6 YOUTUBE';
@@ -460,6 +673,23 @@ function updateSourceIndicator(text) {
   if (ss) {
     ss.textContent = text === 'SPOTIFY' ? '\u266b SPOTIFY' : text === 'YOUTUBE' ? '\u25b6 YOUTUBE' : text;
     ss.className = text === 'SPOTIFY' ? 'source-spotify' : 'source-youtube';
+  }
+}
+
+function updateStationMeta(statusLabel = null) {
+  const modeText = HAS_SHARED_BACKEND ? 'Shared family station' : 'Local preview mode';
+  const statusText = statusLabel || (state.stationReady ? 'Live sync ready' : 'Tuning');
+  const listenersText = HAS_SHARED_BACKEND ? ` · listeners ${Math.max(state.listenerCount, 1)}` : '';
+  const fullText = `${modeText} · ${statusText}${listenersText}`;
+
+  const modeEl = document.getElementById('station-mode');
+  if (modeEl) {
+    modeEl.textContent = fullText;
+  }
+
+  const mobileEl = document.getElementById('mobile-station-mode');
+  if (mobileEl) {
+    mobileEl.textContent = fullText;
   }
 }
 
@@ -502,19 +732,32 @@ function buildSidebar() {
       <div class="track-health ${score > 0 ? 'pos' : score < 0 ? 'neg' : 'zero'}">${score !== 0 ? (score > 0 ? '+' : '') + score : '\u00b7'}</div>
     `;
     item.addEventListener('click', () => {
-      // Only fire click if sidebar drag is NOT active
       if (!sidebarDragState.active) playTrackManual(idx);
     });
     list.appendChild(item);
   });
-  document.getElementById('sidebar-search').addEventListener('input', e => {
+
+  const addPanel = document.createElement('div');
+  addPanel.className = 'queue-add-panel';
+  addPanel.innerHTML = `
+    <div class="queue-add-title">FAMILY QUEUE</div>
+    <form id="sidebar-add-form" class="queue-add-form">
+      <input type="text" name="title" placeholder="Song title" autocomplete="off" required />
+      <input type="text" name="artist" placeholder="Artist" autocomplete="off" required />
+      <button type="submit">Add to station</button>
+    </form>
+  `;
+  list.appendChild(addPanel);
+
+  const search = document.getElementById('sidebar-search');
+  search.oninput = e => {
     const q = e.target.value.toLowerCase();
     document.querySelectorAll('.sidebar-track').forEach(el => {
       const t = el.querySelector('.track-title').textContent.toLowerCase();
       const a = el.querySelector('.track-artist').textContent.toLowerCase();
       el.style.display = (t.includes(q) || a.includes(q)) ? 'flex' : 'none';
     });
-  });
+  };
 }
 
 function updateSidebarActiveState(songId) {
@@ -551,14 +794,28 @@ function buildMobileList() {
     item.addEventListener('click', () => playTrackManual(idx));
     list.appendChild(item);
   });
-  document.getElementById('mobile-search').addEventListener('input', e => {
+
+  const addPanel = document.createElement('div');
+  addPanel.className = 'mobile-add-panel';
+  addPanel.innerHTML = `
+    <div class="queue-add-title">Add a song for everyone</div>
+    <form id="mobile-add-form" class="queue-add-form mobile">
+      <input type="text" name="title" placeholder="Song title" autocomplete="off" required />
+      <input type="text" name="artist" placeholder="Artist" autocomplete="off" required />
+      <button type="submit">Add</button>
+    </form>
+  `;
+  list.appendChild(addPanel);
+
+  const search = document.getElementById('mobile-search');
+  search.oninput = e => {
     const q = e.target.value.toLowerCase();
     document.querySelectorAll('.mobile-track').forEach(el => {
       const t = el.querySelector('.mobile-track-title').textContent.toLowerCase();
       const a = el.querySelector('.mobile-track-artist').textContent.toLowerCase();
       el.style.display = (t.includes(q) || a.includes(q)) ? 'flex' : 'none';
     });
-  });
+  };
 }
 
 function updateMobileActiveState(songId) {
@@ -580,11 +837,10 @@ let _vizAnimFrame = null;
 const VIZ_BINS = 24;     // must match CFG.activeWaveformBars
 
 async function startVisualizerForTrack(song) {
-  // Cancel any previous visualizer loop
   if (_vizAnimFrame) { cancelAnimationFrame(_vizAnimFrame); _vizAnimFrame = null; }
   _vizAnalysis = null;
+  updateStationMeta();
 
-  // Try to fetch Spotify audio analysis if we have a token and track ID
   if (song.spotifyUri && getStoredToken()) {
     const trackId = song.spotifyUri.split(':').pop();
     try {
@@ -673,7 +929,14 @@ function pumpVisualizerData() {
 // QUEUE REORDER (used by helix drag-drop & sidebar drag)
 // ====================================================
 function reorderQueue(fromQueueIdx, toQueueIdx) {
-  // Protect the currently playing song
+  if (HAS_SHARED_BACKEND) {
+    requestStationAction('/api/reorder', { fromIndex: fromQueueIdx, toIndex: toQueueIdx }).catch(err => {
+      console.warn('[Radio] Shared reorder failed:', err.message);
+      showToast('Queue move failed');
+    });
+    return;
+  }
+
   if (fromQueueIdx === state.currentIndex) return;
 
   const qLen = state.queue.length;
@@ -681,41 +944,84 @@ function reorderQueue(fromQueueIdx, toQueueIdx) {
   if (toQueueIdx < 0 || toQueueIdx >= qLen) return;
   if (fromQueueIdx === toQueueIdx) return;
 
-  // Don't allow dropping onto the currently playing slot
   if (toQueueIdx === state.currentIndex) return;
 
   const song = state.queue[fromQueueIdx];
 
-  // Remove from old position
   state.queue.splice(fromQueueIdx, 1);
 
-  // Adjust currentIndex if needed after removal
   let newCurrent = state.currentIndex;
   if (fromQueueIdx < newCurrent) {
     newCurrent--;
   }
 
-  // Adjust toQueueIdx after removal
   let insertAt = toQueueIdx;
   if (fromQueueIdx < toQueueIdx) {
     insertAt--;
   }
 
-  // Insert at new position
   state.queue.splice(insertAt, 0, song);
 
-  // Adjust currentIndex if needed after insertion
   if (insertAt <= newCurrent) {
     newCurrent++;
   }
   state.currentIndex = newCurrent;
 
-  // Rebuild everything
   if (window.helixRebuild) window.helixRebuild();
   buildSidebar();
+  buildMobileList();
   updateSidebarActiveState(state.queue[state.currentIndex].id);
+  updateMobileActiveState(state.queue[state.currentIndex].id);
   showToast(`MOVED: ${song.title}`);
   console.log(`[Radio] Reordered: "${song.title}" from ${fromQueueIdx} to ${insertAt}`);
+}
+
+function setupAddSongForms() {
+  const bind = (selector) => {
+    const form = document.querySelector(selector);
+    if (!form || form.dataset.bound === 'true') return;
+    form.dataset.bound = 'true';
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const fd = new FormData(form);
+      const title = String(fd.get('title') || '').trim();
+      const artist = String(fd.get('artist') || '').trim();
+      if (!title || !artist) return;
+
+      const button = form.querySelector('button');
+      if (button) button.disabled = true;
+      try {
+        if (HAS_SHARED_BACKEND) {
+          await requestStationAction('/api/add-song', { title, artist });
+          showToast(`Added: ${title}`);
+        } else {
+          const newSong = normalizeTrack({
+            id: `manual_${Date.now()}`,
+            title,
+            artist,
+            duration: 210,
+            youtubeId: '',
+            health: 0,
+          }, state.queue.length);
+          state.queue.push(newSong);
+          buildSidebar();
+          buildMobileList();
+          if (window.helixRebuild) window.helixRebuild();
+          showToast(`Queued locally: ${title}`);
+        }
+        form.reset();
+      } catch (err) {
+        showToast('Could not add that song');
+        console.warn('[Radio] Add-song failed:', err.message);
+      } finally {
+        if (button) button.disabled = false;
+        setupAddSongForms();
+      }
+    });
+  };
+
+  bind('#sidebar-add-form');
+  bind('#mobile-add-form');
 }
 
 // ====================================================
@@ -929,6 +1235,11 @@ async function initHelix() {
   createStars();
   animateVoid();
 })();
+
+window.addEventListener('beforeunload', () => {
+  if (sharedSync.pollTimer) clearInterval(sharedSync.pollTimer);
+  if (sharedSync.stream) sharedSync.stream.close();
+});
 
 // ====================================================
 // RESIZE

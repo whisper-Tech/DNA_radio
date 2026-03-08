@@ -1,280 +1,210 @@
 import { EventEmitter } from 'events';
-import { getPlaylistTracks, getYoutubeId } from './spotify.js';
-import { getAISuggestions } from './ai.js';
+import { PLAYLIST } from '../playlist-data.js';
+import { getYoutubeId } from './spotify.js';
+
+function cloneSong(song, idx = 0) {
+  const rawDuration = Number(song?.duration || 210);
+  const durationSeconds = rawDuration > 1000 ? Math.round(rawDuration / 1000) : rawDuration;
+  return {
+    id: song?.id || `seed_${idx}`,
+    title: song?.title || 'Unknown Track',
+    artist: song?.artist || 'Unknown Artist',
+    spotifyUri: song?.spotifyUri || song?.uri || null,
+    youtubeId: song?.youtubeId || '',
+    duration: durationSeconds || 210,
+    health: Number(song?.health || 0),
+    status: song?.status || 'active',
+  };
+}
+
+function durationMs(song) {
+  const value = Number(song?.duration || 210);
+  return value > 1000 ? value : value * 1000;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
 
 class RadioState extends EventEmitter {
   constructor() {
     super();
-    this.playlist = [];
+    this.playlist = PLAYLIST.map(cloneSong);
     this.currentIndex = 0;
     this.songStartTime = Date.now();
     this.isPlaying = true;
-    this.playlistUrl = 'https://open.spotify.com/playlist/7clEOXvB7CyiUy1X0vmCus';
-    this.crossFadeDuration = 300; // ms for cross-fade transition
-    this.isTransitioning = false;
-    this.pendingSuggestions = null;
-    this.suggestionTimer = null;
-    
-    this.init();
+    this.pausedPositionMs = 0;
+    this.listenerCount_ = 0;
+    this.lastAdvanceAt = 0;
+    this.lastAdvanceSourceStart = 0;
+    this.endTimer = null;
+
+    this.startSongEndLoop();
   }
 
-  async init() {
-    console.log(`[RADIO] Initializing with public playlist...`);
-    const tracks = await getPlaylistTracks(this.playlistUrl);
-    
-    if (tracks.length > 0) {
-      this.playlist = tracks;
-      // Pre-resolve the first song's YouTube ID
-      const firstSong = this.playlist[0];
-      firstSong.youtubeId = await getYoutubeId(firstSong.title, firstSong.artist);
-      
-      // Pre-fetch next song's YouTube ID in background
-      this.prefetchNextSong();
-      
-      console.log(`[RADIO] Loaded ${this.playlist.length} songs. Starting broadcast.`);
-      this.emit('update', this.state);
-    } else {
-      console.error('[RADIO] Failed to load any tracks.');
-    }
-    
-    this.checkSongEnd();
+  get currentSong() {
+    return this.playlist[this.currentIndex] || null;
+  }
+
+  getCurrentPosition() {
+    if (!this.currentSong) return 0;
+    if (!this.isPlaying) return this.pausedPositionMs;
+    return Math.max(0, Date.now() - this.songStartTime);
   }
 
   get state() {
     return {
-      playlist: this.playlist.filter(s => s.status !== 'removed'),
-      currentSong: this.playlist[this.currentIndex],
+      playlist: this.playlist.filter(song => song.status !== 'removed'),
+      currentSong: this.currentSong,
       currentIndex: this.currentIndex,
       songStartTime: this.songStartTime,
       isPlaying: this.isPlaying,
-      serverTime: Date.now(), // Include server time for sync
-      pendingSuggestions: this.pendingSuggestions
+      serverTime: Date.now(),
+      currentPosition: this.getCurrentPosition(),
+      listenerCount: this.listenerCount_,
     };
   }
 
-  // Pre-fetch YouTube ID for the next song to reduce transition latency
-  async prefetchNextSong() {
-    const nextIndex = this.getNextValidIndex(this.currentIndex);
-    const nextSong = this.playlist[nextIndex];
-    
-    if (nextSong && !nextSong.youtubeId) {
-      console.log(`[PREFETCH] Loading YouTube ID for: "${nextSong.title}"`);
-      nextSong.youtubeId = await getYoutubeId(nextSong.title, nextSong.artist);
-    }
+  getFullSyncState() {
+    return this.state;
   }
 
-  // Get the next valid (non-removed) song index
-  getNextValidIndex(fromIndex) {
-    let nextIndex = (fromIndex + 1) % this.playlist.length;
-    let attempts = 0;
-    const maxAttempts = this.playlist.length;
-    
-    while (this.playlist[nextIndex].status === 'removed' && attempts < maxAttempts) {
-      nextIndex = (nextIndex + 1) % this.playlist.length;
-      attempts++;
-    }
-    
-    return nextIndex;
+  emitUpdate() {
+    this.emit('update', this.getFullSyncState());
   }
 
-  async nextSong(immediate = false) {
-    if (this.isTransitioning && !immediate) {
-      console.log('[RADIO] Already transitioning, skipping duplicate call');
-      return;
-    }
-    
-    this.isTransitioning = true;
-    
-    const previousIndex = this.currentIndex;
-    this.currentIndex = this.getNextValidIndex(this.currentIndex);
+  updateListenerCount(count) {
+    const nextCount = Math.max(0, Number(count || 0));
+    if (nextCount === this.listenerCount_) return;
+    this.listenerCount_ = nextCount;
+    this.emitUpdate();
+  }
 
-    // Resolve YouTube ID for the next song if not already done
-    const nextSong = this.playlist[this.currentIndex];
-    if (!nextSong.youtubeId) {
-      nextSong.youtubeId = await getYoutubeId(nextSong.title, nextSong.artist);
-    }
-
+  playIndex(index) {
+    if (!this.playlist.length) return this.getFullSyncState();
+    const nextIndex = clamp(Number(index || 0), 0, this.playlist.length - 1);
+    this.currentIndex = nextIndex;
     this.songStartTime = Date.now();
-    
-    console.log(`[RADIO] Now Playing: "${nextSong.title}" by ${nextSong.artist} (YT: ${nextSong.youtubeId})`);
-    console.log(`[RADIO] Transition: ${previousIndex} -> ${this.currentIndex} (immediate: ${immediate})`);
-    
-    this.emit('update', this.state);
-    
-    // Pre-fetch the next song in background
-    this.prefetchNextSong();
-    
-    // Reset transition flag after cross-fade duration
-    setTimeout(() => {
-      this.isTransitioning = false;
-    }, this.crossFadeDuration);
+    this.pausedPositionMs = 0;
+    this.isPlaying = true;
+    this.emitUpdate();
+    return this.getFullSyncState();
   }
 
-  // Immediate transition for removed songs (cross-fade effect)
-  async immediateTransition(removedSongId, voterId = null) {
-    console.log(`[RADIO] Immediate transition triggered for removed song: ${removedSongId}`);
-    
-    const currentSong = this.playlist[this.currentIndex];
-    
-    // Get AI suggestions for the next song
-    const suggestions = await getAISuggestions(currentSong);
-    
-    this.pendingSuggestions = {
-      suggestions,
-      voterId,
-      expiresAt: Date.now() + 10000 // 10 seconds to pick
-    };
+  nextSong({ expectedStartTime = null } = {}) {
+    if (!this.playlist.length) return this.getFullSyncState();
 
-    // Emit removal event for client-side glitch effect
-    this.emit('song_removed', {
-      songId: removedSongId,
-      nextIndex: this.getNextValidIndex(this.currentIndex),
-      pendingSuggestions: this.pendingSuggestions
-    });
-    
-    this.emit('update', this.state);
-
-    // Set a timer to automatically pick the next song if no one chooses
-    // Using 5 seconds for the fade out as per LOGIC.md
-    if (this.suggestionTimer) clearTimeout(this.suggestionTimer);
-    this.suggestionTimer = setTimeout(() => {
-      if (this.pendingSuggestions) {
-        console.log('[RADIO] Suggestion time expired, picking default next song');
-        this.pendingSuggestions = null;
-        this.nextSong(true);
-      }
-    }, 10000);
-  }
-
-  async selectAISuggestion(suggestionIndex, voterId) {
-    if (!this.pendingSuggestions || this.pendingSuggestions.voterId !== voterId) {
-      console.log('[RADIO] Suggestion pick ignored - invalid voter or no pending suggestions');
-      return;
+    if (
+      typeof expectedStartTime === 'number'
+      && this.lastAdvanceSourceStart === expectedStartTime
+      && Date.now() - this.lastAdvanceAt < 2500
+    ) {
+      return this.getFullSyncState();
     }
 
-    const pick = this.pendingSuggestions.suggestions[suggestionIndex];
-    if (!pick) return;
+    if (
+      typeof expectedStartTime === 'number'
+      && Math.abs(expectedStartTime - this.songStartTime) > 2500
+      && Date.now() - this.lastAdvanceAt < 2500
+    ) {
+      return this.getFullSyncState();
+    }
 
-    console.log(`[RADIO] AI Suggestion picked: "${pick.title}" by ${pick.artist}`);
-    
-    // Create a temporary song object
-    const newSong = {
-      id: `ai_${Math.random().toString(36).substr(2, 9)}`,
-      title: pick.title,
-      artist: pick.artist,
+    this.lastAdvanceSourceStart = this.songStartTime;
+    this.lastAdvanceAt = Date.now();
+    this.currentIndex = (this.currentIndex + 1) % this.playlist.length;
+    this.songStartTime = Date.now();
+    this.pausedPositionMs = 0;
+    this.isPlaying = true;
+    this.emitUpdate();
+    return this.getFullSyncState();
+  }
+
+  seek(seconds) {
+    if (!this.currentSong) return this.getFullSyncState();
+    const songDurationSeconds = durationMs(this.currentSong) / 1000;
+    const nextSeconds = clamp(Number(seconds || 0), 0, songDurationSeconds);
+    this.pausedPositionMs = nextSeconds * 1000;
+    this.songStartTime = Date.now() - this.pausedPositionMs;
+    this.isPlaying = true;
+    this.emitUpdate();
+    return this.getFullSyncState();
+  }
+
+  reorder(fromIndex, toIndex) {
+    if (!this.playlist.length) return this.getFullSyncState();
+
+    const qLen = this.playlist.length;
+    const from = clamp(Number(fromIndex), 0, qLen - 1);
+    const to = clamp(Number(toIndex), 0, qLen - 1);
+
+    if (Number.isNaN(from) || Number.isNaN(to) || from === to) {
+      return this.getFullSyncState();
+    }
+
+    if (from === this.currentIndex || to === this.currentIndex) {
+      return this.getFullSyncState();
+    }
+
+    const song = this.playlist[from];
+    this.playlist.splice(from, 1);
+
+    let newCurrent = this.currentIndex;
+    if (from < newCurrent) newCurrent -= 1;
+
+    let insertAt = to;
+    if (from < to) insertAt -= 1;
+
+    this.playlist.splice(insertAt, 0, song);
+
+    if (insertAt <= newCurrent) newCurrent += 1;
+    this.currentIndex = clamp(newCurrent, 0, this.playlist.length - 1);
+
+    this.emitUpdate();
+    return this.getFullSyncState();
+  }
+
+  async manualAdd(title, artist, duration = 210) {
+    const cleanTitle = String(title || '').trim();
+    const cleanArtist = String(artist || '').trim();
+    if (!cleanTitle || !cleanArtist) {
+      throw new Error('Missing title or artist');
+    }
+
+    const durationSeconds = Number(duration || 210) > 1000 ? Math.round(Number(duration) / 1000) : Number(duration || 210);
+    let youtubeId = '';
+
+    try {
+      youtubeId = await getYoutubeId(cleanTitle, cleanArtist, durationSeconds * 1000);
+    } catch (err) {
+      console.warn('[RADIO] YouTube lookup failed for manual add:', err?.message || err);
+    }
+
+    const newSong = cloneSong({
+      id: `manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      title: cleanTitle,
+      artist: cleanArtist,
+      youtubeId,
+      duration: durationSeconds,
       health: 0,
       status: 'active',
-      isAISuggested: true
-    };
+    }, this.playlist.length);
 
-    // Get YouTube ID
-    newSong.youtubeId = await getYoutubeId(newSong.title, newSong.artist);
-    
-    // Insert into playlist at next position and move to it
-    this.playlist.splice(this.currentIndex + 1, 0, newSong);
-    
-    if (this.suggestionTimer) clearTimeout(this.suggestionTimer);
-    this.pendingSuggestions = null;
-    this.nextSong(true);
-  }
-
-  checkSongEnd() {
-    setInterval(() => {
-      if (this.playlist.length === 0 || this.isTransitioning || this.pendingSuggestions) return;
-      
-      const now = Date.now();
-      const currentSong = this.playlist[this.currentIndex];
-      
-      if (!currentSong || currentSong.status === 'removed') {
-        this.nextSong();
-        return;
-      }
-      
-      const elapsed = now - this.songStartTime;
-      const duration = currentSong.duration || 180000;
-
-      if (this.isPlaying && elapsed > duration) { 
-        this.nextSong();
-      }
-    }, 1000);
-  }
-
-  vote(songId, type, voterId = null) {
-    const song = this.playlist.find(s => s.id === songId);
-    if (!song || song.status === 'removed') {
-      console.log(`[VOTE] Ignored - song ${songId} not found or already removed`);
-      return;
-    }
-
-    const previousHealth = song.health;
-
-    if (type === 'accept') {
-      if (song.health < 10) {
-        song.health++;
-        console.log(`[VOTE] ACCEPT on "${song.title}": ${previousHealth} -> ${song.health}`);
-      }
-      
-      // Check for immortal status
-      if (song.health >= 10 && song.status !== 'immortal') {
-        song.status = 'immortal';
-        console.log(`[IMMORTAL] "${song.title}" has achieved IMMORTAL status!`);
-        this.emit('song_immortal', { songId: song.id, title: song.title });
-      }
-    } else if (type === 'reject') {
-      if (song.health > -10) {
-        song.health--;
-        console.log(`[VOTE] REJECT on "${song.title}": ${previousHealth} -> ${song.health}`);
-      }
-      
-      // IMMEDIATE REMOVAL when health hits -10
-      if (song.health <= -10 && song.status !== 'removed') {
-        song.status = 'removed';
-        console.log(`[REMOVED] "${song.title}" has been REMOVED from the sequence!`);
-        
-        // If this is the current song, trigger immediate transition with cross-fade and AI suggestions
-        if (song.id === this.playlist[this.currentIndex].id) {
-          console.log(`[REMOVED] Current song removed - initiating immediate cross-fade transition`);
-          this.immediateTransition(song.id, voterId);
-          return; // Don't emit update here, immediateTransition will handle it
-        }
-        
-        this.emit('song_removed', { songId: song.id });
-      }
-    }
-
-    // Emit update for health changes
-    this.emit('update', this.state);
-  }
-
-  manualAdd(title, artist, youtubeId, duration = 180000) {
-    const newSong = {
-      id: `manual_${Math.random().toString(36).substr(2, 9)}`,
-      title,
-      artist,
-      youtubeId,
-      duration,
-      health: 0,
-      status: 'active'
-    };
     this.playlist.push(newSong);
-    console.log(`[RADIO] Manually added: "${title}" by ${artist}`);
-    this.emit('update', this.state);
+    this.emitUpdate();
     return newSong;
   }
 
-  // Get current playback position for sync
-  getCurrentPosition() {
-    if (!this.isPlaying) return 0;
-    return Date.now() - this.songStartTime;
-  }
-
-  // Force sync state (for reconnecting clients)
-  getFullSyncState() {
-    return {
-      ...this.state,
-      serverTime: Date.now(),
-      currentPosition: this.getCurrentPosition()
-    };
+  startSongEndLoop() {
+    if (this.endTimer) clearInterval(this.endTimer);
+    this.endTimer = setInterval(() => {
+      if (!this.isPlaying || !this.currentSong) return;
+      const elapsed = this.getCurrentPosition();
+      const currentDuration = durationMs(this.currentSong);
+      if (elapsed >= currentDuration - 500) {
+        this.nextSong({ expectedStartTime: this.songStartTime });
+      }
+    }, 1000);
   }
 }
 

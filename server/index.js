@@ -1,222 +1,104 @@
 import express from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import cors from 'cors';
 import { radio } from './state.js';
-import * as db from './db.js';
 
 const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*", // Allow all for dev
-    methods: ["GET", "POST"]
-  },
-  // Optimize for low latency
-  pingTimeout: 10000,
-  pingInterval: 5000,
-  transports: ['websocket', 'polling']
-});
+const PORT = Number(process.env.PORT || 3001);
+const HOST = '0.0.0.0';
 
-app.use(cors());
 app.use(express.json());
 
-// Root Route (Health Check)
-app.get('/', (req, res) => {
-  res.send('DNA Radio Server is Running. Connect via Socket.io or use /api/status');
-});
+const sseClients = new Set();
 
-// Basic API
-app.get('/api/status', (req, res) => {
-  res.json(radio.state);
-});
-
-// Full sync endpoint for debugging
-app.get('/api/sync', (req, res) => {
-  res.json(radio.getFullSyncState());
-});
-
-// Admin API endpoints
-app.get('/api/admin/stats', async (req, res) => {
-  try {
-    const stats = await db.getSongStatistics();
-    res.json(stats);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+function broadcastState() {
+  const payload = `event: state_update\ndata: ${JSON.stringify(radio.getFullSyncState())}\n\n`;
+  for (const client of [...sseClients]) {
+    try {
+      client.write(payload);
+    } catch (err) {
+      sseClients.delete(client);
+    }
   }
+}
+
+function sendState(res) {
+  return res.json(radio.getFullSyncState());
+}
+
+app.get('/', (_req, res) => {
+  res.send('DNA Radio shared station server is running.');
 });
 
-app.get('/api/admin/songs', async (req, res) => {
-  try {
-    const songs = await db.getAllSongs();
-    res.json(songs);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.get('/api/status', (_req, res) => {
+  sendState(res);
 });
 
-app.get('/api/admin/plays', async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 50;
-    const plays = await db.getRecentPlays(limit);
-    res.json(plays);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.get('/api/sync', (_req, res) => {
+  sendState(res);
 });
 
-app.delete('/api/admin/songs/:id', async (req, res) => {
-  try {
-    await db.updateSong(req.params.id, { status: 'removed' });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.get('/api/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  });
+  sseClients.add(res);
+  radio.updateListenerCount(sseClients.size);
+  res.write(`event: state_update\ndata: ${JSON.stringify(radio.getFullSyncState())}\n\n`);
+
+  const heartbeat = setInterval(() => {
+    res.write(`event: ping\ndata: ${Date.now()}\n\n`);
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.delete(res);
+    radio.updateListenerCount(sseClients.size);
+  });
 });
 
-app.put('/api/admin/songs/:id', async (req, res) => {
-  try {
-    const song = await db.updateSong(req.params.id, req.body);
-    res.json({ success: true, song });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.post('/api/play', (req, res) => {
+  const index = Number(req.body?.index || 0);
+  const state = radio.playIndex(index);
+  res.json(state);
+});
+
+app.post('/api/next', (req, res) => {
+  const expectedStartTime = typeof req.body?.expectedStartTime === 'number'
+    ? req.body.expectedStartTime
+    : null;
+  const state = radio.nextSong({ expectedStartTime });
+  res.json(state);
+});
+
+app.post('/api/seek', (req, res) => {
+  const seconds = Number(req.body?.seconds || 0);
+  const state = radio.seek(seconds);
+  res.json(state);
+});
+
+app.post('/api/reorder', (req, res) => {
+  const fromIndex = Number(req.body?.fromIndex);
+  const toIndex = Number(req.body?.toIndex);
+  const state = radio.reorder(fromIndex, toIndex);
+  res.json(state);
 });
 
 app.post('/api/add-song', async (req, res) => {
   try {
-    const { title, artist, youtubeId, duration } = req.body;
-    if (!title || !artist || !youtubeId) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-    const song = await radio.manualAdd(title, artist, youtubeId, duration);
-    res.json({ success: true, song });
+    const { title, artist, duration } = req.body || {};
+    const song = await radio.manualAdd(title, artist, duration || 210);
+    res.json({ ...radio.getFullSyncState(), addedSong: song });
   } catch (err) {
-    console.error('[API] Error in add-song:', err);
-    res.status(500).json({ error: 'Failed to add song' });
+    res.status(400).json({ error: err?.message || 'Failed to add song' });
   }
 });
 
-// Socket.io
-const connectedClients = new Map();
-
-io.on('connection', async (socket) => {
-  console.log(`[SOCKET] Client connected: ${socket.id}`);
-  
-  // Generate device fingerprint from connection info
-  const userAgent = socket.handshake.headers['user-agent'] || '';
-  const language = socket.handshake.headers['accept-language'] || '';
-  const deviceFingerprint = Buffer.from(`${userAgent}-${language}-${socket.id}`).toString('base64').substring(0, 32);
-  
-  // Get or create user
-  let user;
-  try {
-    user = await db.getOrCreateUser(deviceFingerprint);
-    console.log(`[USER] Device fingerprint: ${deviceFingerprint.substring(0, 8)}... -> User ID: ${user.id}`);
-  } catch (err) {
-    console.error('[USER] Error creating user:', err);
-    user = { id: socket.id }; // Fallback to socket ID
-  }
-
-  // Store user info with socket
-  connectedClients.set(socket.id, { userId: user.id, deviceFingerprint });
-  
-  // Update listener count
-  radio.updateListenerCount(connectedClients.size);
-
-  // Send initial state with full sync info
-  socket.emit('state_update', radio.getFullSyncState());
-
-  // Handle ping for time synchronization (NTP-style)
-  socket.on('ping', ({ clientTime }) => {
-    socket.emit('pong', {
-      clientTime: clientTime,
-      serverTime: Date.now()
-    });
-  });
-
-  // Handle Voting with user tracking
-  socket.on('vote', async ({ songId, type }) => {
-    try {
-      const clientInfo = connectedClients.get(socket.id);
-      const userId = clientInfo?.userId || socket.id;
-      
-      console.log(`[VOTE] ${type.toUpperCase()} on ${songId} by ${userId}`);
-      await radio.vote(songId, type, userId, socket.id);
-    } catch (err) {
-      console.error('[SOCKET] Error handling vote:', err);
-      socket.emit('error', { type: 'vote', message: 'Failed to process vote' });
-    }
-  });
-
-  // Handle AI Suggestion Selection
-  socket.on('select_suggestion', async ({ index }) => {
-    try {
-      console.log(`[SYNC] Suggestion ${index} selected by ${socket.id}`);
-      await radio.selectAISuggestion(index, socket.id);
-    } catch (err) {
-      console.error('[SOCKET] Error handling select_suggestion:', err);
-      socket.emit('error', { type: 'select_suggestion', message: 'Failed to select suggestion' });
-    }
-  });
-
-  // Handle skip request
-  socket.on('skip', async () => {
-    try {
-      const clientInfo = connectedClients.get(socket.id);
-      if (!clientInfo) return;
-      
-      console.log(`[SKIP] Skip requested by ${clientInfo.userId}`);
-      // Skip functionality - could be rate-limited or require multiple votes
-      // For now, just log it
-    } catch (err) {
-      console.error('[SOCKET] Error handling skip:', err);
-    }
-  });
-
-  // Handle explicit sync request
-  socket.on('request_sync', () => {
-    try {
-      console.log(`[SYNC] Sync requested by ${socket.id}`);
-      socket.emit('state_update', radio.getFullSyncState());
-    } catch (err) {
-      console.error('[SOCKET] Error handling request_sync:', err);
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`[SOCKET] Client disconnected: ${socket.id}`);
-    connectedClients.delete(socket.id);
-    radio.updateListenerCount(connectedClients.size);
-  });
-
-  socket.on('error', (error) => {
-    console.error(`[SOCKET] Error from ${socket.id}:`, error);
-  });
+radio.on('update', () => {
+  broadcastState();
 });
 
-// Broadcast updates when radio state changes
-radio.on('update', (state) => {
-  io.emit('state_update', {
-    ...state,
-    serverTime: Date.now()
-  });
-});
-
-// Broadcast song removal events for cross-fade effect
-radio.on('song_removed', ({ songId, nextIndex }) => {
-  console.log(`[BROADCAST] Song removed event: ${songId}`);
-  io.emit('song_removed', { songId, nextIndex });
-});
-
-// Broadcast immortal status events
-radio.on('song_immortal', ({ songId, title }) => {
-  console.log(`[BROADCAST] Song immortal event: ${title}`);
-  io.emit('song_immortal', { songId, title });
-});
-
-const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
-  console.log(`[SERVER] DNA Radio running on http://localhost:${PORT}`);
-  console.log(`[SERVER] WebSocket enabled with low-latency configuration`);
+app.listen(PORT, HOST, () => {
+  console.log(`[SERVER] DNA Radio shared station running at http://${HOST}:${PORT}`);
 });
